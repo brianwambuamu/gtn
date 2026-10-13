@@ -272,7 +272,21 @@ export default function AdminPage() {
   }
 
   return (
-    <main className="container main">
+    <main className={`container main${isSuperAdmin ? " owner-admin" : ""}`}>
+      {isSuperAdmin && <aside className="owner-sidebar" aria-label="Super Admin navigation">
+        <div className="owner-sidebar__identity"><span className="owner-sidebar__eyebrow">GTN WORKSPACE</span><strong>Super Admin</strong><small>Owner controls</small></div>
+        <nav className="owner-sidebar__nav">
+          <a href="#admin-dashboard"><span className="owner-sidebar__icon">⌂</span>Dashboard</a>
+          <a href="#admin-add-story"><span className="owner-sidebar__icon">＋</span>Add Story</a>
+          <a href="#admin-add-staff"><span className="owner-sidebar__icon">♙</span>Add Staff</a>
+          <a href="#admin-roles"><span className="owner-sidebar__icon">♧</span>Roles &amp; Permissions</a>
+          <a href="#admin-advertising"><span className="owner-sidebar__icon">▣</span>Advertising</a>
+        </nav>
+        <div className="owner-sidebar__footer"><span className="owner-sidebar__status" /> Owner access enabled</div>
+      </aside>}
+      <div className="owner-content">
+      {isSuperAdmin && <div className="owner-page-heading"><div><span className="owner-sidebar__eyebrow">CONTROL CENTER</span><h1>Super Admin Workspace</h1><p>Manage publishing, staff access, and advertising from one place.</p></div><span className="owner-page-heading__badge">OWNER</span></div>}
+      <section id="admin-dashboard" className="owner-section">
       <div className="cat-head cat-head--split">
         <div>
           <h1>Editorial Desk</h1>
@@ -313,13 +327,16 @@ export default function AdminPage() {
         </div>
         {isSuperAdmin && <div className="stats__item"><b>{ads.length}</b><span>Live ads</span></div>}
       </div>
+      </section>
 
       {flash && <p className="flash">{flash}</p>}
 
-      {isSuperAdmin && <section className="admin__panel admin__panel--full" aria-label="Reporter accounts"><h2>Reporter access</h2><p className="form__hint">Create a staff account. The reporter receives a secure email invitation to set their own password.</p><form className="form" onSubmit={onInviteReporter}><div className="admin__row"><label><span>Reporter name</span><input value={reporterName} onChange={(e) => setReporterName(e.target.value)} required /></label><label><span>Work email</span><input type="email" value={reporterEmail} onChange={(e) => setReporterEmail(e.target.value)} required /></label></div><button className="btn" type="submit">Invite reporter</button></form></section>}
+      {isSuperAdmin && <section id="admin-add-staff" className="admin__panel admin__panel--full owner-section" aria-label="Add staff"><div className="owner-section__heading"><span className="owner-section__eyebrow">TEAM MANAGEMENT</span><h2>Add Staff</h2></div><p className="form__hint">Create a staff account. The reporter receives a secure email invitation to set their own password.</p><form className="form" onSubmit={onInviteReporter}><div className="admin__row"><label><span>Staff name</span><input value={reporterName} onChange={(e) => setReporterName(e.target.value)} required /></label><label><span>Work email</span><input type="email" value={reporterEmail} onChange={(e) => setReporterEmail(e.target.value)} required /></label></div><button className="btn" type="submit">Invite staff member</button></form></section>}
+
+      {isSuperAdmin && <section id="admin-roles" className="admin__panel admin__panel--full owner-section" aria-label="Roles and permissions"><div className="owner-section__heading"><span className="owner-section__eyebrow">ACCESS CONTROL</span><h2>Roles &amp; Permissions</h2></div><p className="form__hint">GTN staff access is assigned by role. Invite staff from the Add Staff section; super admin access is reserved for the site owner.</p><div className="owner-role-grid"><article><span className="owner-role-grid__mark owner-role-grid__mark--owner">SA</span><div><h3>Super Admin</h3><p>Full owner access to editorial publishing, staff invitations, and advertising.</p></div><span className="owner-role-grid__tag">Full access</span></article><article><span className="owner-role-grid__mark">RP</span><div><h3>Reporter</h3><p>Submit stories to the editorial desk and manage assigned reporting work.</p></div><span className="owner-role-grid__tag">Editorial</span></article></div></section>}
 
       <div className="admin">
-        <section className="admin__panel" aria-label="Add story">
+        <section id={isSuperAdmin ? "admin-add-story" : undefined} className="admin__panel owner-section" aria-label="Add story">
           <h2>{editingId ? "Edit story" : isSuperAdmin ? "Publish a story" : "Submit a story"}</h2>
           <form className="form" onSubmit={onSubmit}>
             <label>
@@ -503,7 +520,7 @@ export default function AdminPage() {
           </form>
         </section>
 
-        <section className="admin__panel" aria-label="Manage stories">
+        <section className="admin__panel owner-section" aria-label="Manage stories">
           <h2>{isSuperAdmin ? "Editorial management" : "Your stories"}</h2>
           <label className="form__search">
             <span>Filter</span>
@@ -555,8 +572,7 @@ export default function AdminPage() {
         </section>
       </div>
 
-      {isSuperAdmin && <section
-        className="admin__panel admin__panel--full"
+      {isSuperAdmin && <section id="admin-advertising" className="admin__panel admin__panel--full owner-section"
         aria-label="Manage ads"
       >
         <h2>Advertising</h2>
@@ -713,6 +729,7 @@ export default function AdminPage() {
           </p>
         )}
       </section>}
+      </div>
     </main>
   );
 }
