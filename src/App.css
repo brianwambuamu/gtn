@@ -1470,6 +1470,7 @@
     color: #aaa;
   }
 }
+.admin--single { grid-template-columns: minmax(0, 1fr); }
 
 .admin__actions {
   display: flex;
@@ -1569,6 +1570,10 @@
 .owner-staff-summary { display: flex; align-items: baseline; gap: 8px; margin: 4px 0 18px; border: 1px solid #e8edf2; border-radius: 10px; background: #f8fafc; padding: 12px 15px; color: #718096; font-size: 12px; }
 .owner-staff-summary strong { color: #23374d; font-size: 21px; }
 .owner-staff-summary strong:nth-of-type(2) { margin-left: 20px; }
+.owner-category-count { display: inline-grid; min-width: 25px; height: 25px; place-items: center; border-radius: 999px; background: #fff1e5; color: #c85d16; font-size: 11px; vertical-align: middle; }
+.permission-list { display: grid; gap: 10px; margin-top: 16px; }
+.permission-list__item { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 16px; border: 1px solid var(--line, #e5e7eb); border-radius: 10px; background: #fff; color: var(--ink, #17202a); font-weight: 600; }
+.permission-list__item input { width: 18px; height: 18px; accent-color: #c85d16; }
 .owner-staff-item__actions { display: flex; flex: none; align-items: center; gap: 8px; }
 .owner-status { border-radius: 999px; padding: 5px 9px; font-size: 10px; font-weight: 800; }
 .owner-status--active { background: #e9f7ef; color: #258352; }

@@ -24,7 +24,9 @@ Deno.serve(async (request) => {
   const { data: { user }, error: authError } = await admin.auth.getUser(accessToken);
   if (authError || !user) return json({ error: "Invalid session" }, 401, origin);
   const { data: profile } = await admin.from("staff_profiles").select("role,is_active").eq("id", user.id).single();
-  if (profile?.role !== "super_admin" || !profile.is_active) return json({ error: "Only active super admins can manage staff" }, 403, origin);
+  const { data: reporterPermissions } = await admin.from("reporter_permissions").select("manage_staff").eq("id", true).maybeSingle();
+  const isOwner = profile?.role === "super_admin";
+  if (!profile?.is_active || (!isOwner && !(profile?.role === "reporter" && reporterPermissions?.manage_staff))) return json({ error: "You do not have permission to manage staff" }, 403, origin);
   const body = await request.json().catch(() => ({}));
   const action = body.action || "invite";
   if (["delete", "deactivate", "activate"].includes(action)) {
@@ -33,6 +35,7 @@ Deno.serve(async (request) => {
     if (targetId === user.id) return json({ error: "You cannot deactivate or delete your own account" }, 400, origin);
     const { data: target } = await admin.from("staff_profiles").select("role,is_active").eq("id", targetId).maybeSingle();
     if (!target) return json({ error: "Staff account not found" }, 404, origin);
+    if (!isOwner && target.role !== "reporter") return json({ error: "Delegated staff managers can only manage reporter accounts" }, 403, origin);
     if (target.role === "super_admin" && target.is_active && (action === "delete" || action === "deactivate")) {
       const { count } = await admin.from("staff_profiles").select("id", { count: "exact", head: true }).eq("role", "super_admin").eq("is_active", true);
       if ((count || 0) <= 1) return json({ error: "The last active super admin cannot be deactivated or deleted" }, 400, origin);

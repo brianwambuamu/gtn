@@ -1,6 +1,5 @@
 import { Link } from "react-router-dom";
 import type { Story } from "../data/news";
-import { breaking } from "../data/news";
 import { useNews } from "../store/NewsContext";
 
 function linkFor(headline: string, stories: Story[]): string {
@@ -29,7 +28,8 @@ function linkFor(headline: string, stories: Story[]): string {
 
 export default function BreakingTicker() {
   const { stories } = useNews();
-  const items = [...breaking, ...breaking];
+  const items = stories.slice(0, 6);
+  if (!items.length) return null;
 
   return (
     <div className="ticker" aria-label="Breaking news">
@@ -37,14 +37,14 @@ export default function BreakingTicker() {
         <span className="ticker__badge">Breaking</span>
         <div className="ticker__viewport">
           <div className="ticker__track">
-            {items.map((headline, i) => (
+            {items.map((story, i) => (
               <Link
                 className="ticker__item"
-                to={linkFor(headline, stories)}
-                key={`${headline}-${i}`}
+                to={linkFor(story.title, stories)}
+                key={`${story.id}-${i}`}
               >
                 <span className="ticker__dot" aria-hidden="true" />
-                {headline}
+                {story.title}
               </Link>
             ))}
           </div>

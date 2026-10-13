@@ -42,6 +42,7 @@ export const backend = {
   insert: <T,>(table: string, body: unknown) => request<T[]>(`/rest/v1/${table}`, { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify(body) }, getSession()?.access_token),
   update: <T,>(table: string, query: string, body: unknown) => request<T[]>(`/rest/v1/${table}?${query}`, { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify(body) }, getSession()?.access_token),
   remove: (table: string, query: string) => request<unknown>(`/rest/v1/${table}?${query}`, { method: "DELETE" }, getSession()?.access_token),
+  rpc: <T,>(name: string, body: unknown) => request<T>(`/rest/v1/rpc/${name}`, { method: "POST", body: JSON.stringify(body) }, getSession()?.access_token),
   invoke: <T,>(name: string, body: unknown) => request<T>(`/functions/v1/${name}`, { method: "POST", body: JSON.stringify(body) }, getSession()?.access_token),
   async upload(file: File, bucket = "editorial-media"): Promise<string> {
     const key = `${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "-")}`;

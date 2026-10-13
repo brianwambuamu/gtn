@@ -34,11 +34,9 @@ export default function NewsPage() {
   const term = (params.get("q") ?? "").trim().toLowerCase();
   const searching = term.length > 0;
 
-  const lead = searching
-    ? undefined
-    : newsStories.find((story) => story.id === "lead-1");
+  const lead = searching ? undefined : newsStories[0];
   const feed = newsStories.filter(
-    (story) => story.id !== "lead-1" && matches(story, term),
+    (story) => story.id !== lead?.id && matches(story, term),
   );
 
   const feedContent: ReactNode[] = [];
@@ -89,6 +87,7 @@ export default function NewsPage() {
         </p>
       ) : (
         <>
+          {!searching && newsStories.length === 0 && <p className="empty">No published news yet. New stories will appear here after they are added to the newsroom database.</p>}
           {lead && (
             <article className="pin">
               <Link

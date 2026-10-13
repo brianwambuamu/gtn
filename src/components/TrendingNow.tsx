@@ -1,5 +1,4 @@
 import { Link } from "react-router-dom";
-import { trendingStories } from "../data/news";
 import { useNews } from "../store/NewsContext";
 
 type Props = {
@@ -8,10 +7,8 @@ type Props = {
 };
 
 export default function TrendingNow({ id, title = "trending now" }: Props) {
-  const { deletedIds } = useNews();
-  const items = trendingStories.filter(
-    (story) => !deletedIds.includes(story.id),
-  );
+  const { stories } = useNews();
+  const items = stories.slice(0, 5);
 
   return (
     <section className="trending" id={id}>

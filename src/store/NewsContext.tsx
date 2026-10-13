@@ -4,13 +4,12 @@ import type { ReactNode } from "react";
 import { slugify } from "../data/categories";
 import type { StoryMedia } from "../data/media";
 import type { Badge, Placement, Story } from "../data/news";
-import { allStories } from "../data/news";
 import { backend, backendConfigured, getSession } from "../lib/backend";
 import { useAuth } from "./AuthContext";
 
 export type NewStoryInput = { title: string; excerpt?: string; category: string; author?: string; badge?: Badge; media?: StoryMedia; placement?: Placement };
 type DbStory = Story & { reporter_id?: string; created_at?: string };
-type NewsContextValue = { stories: Story[]; newsStories: Story[]; customStories: Story[]; deletedIds: string[]; loading: boolean; addStory: (input: NewStoryInput) => Promise<Story>; updateStory: (id: string, input: NewStoryInput) => Promise<void>; deleteStory: (id: string) => Promise<void>; getStory: (id: string) => Story | undefined; categoryStories: (slug: string) => Story[]; };
+type NewsContextValue = { stories: Story[]; newsStories: Story[]; customStories: Story[]; deletedIds: string[]; loading: boolean; addStory: (input: NewStoryInput) => Promise<Story>; updateStory: (id: string, input: NewStoryInput) => Promise<void>; deleteStory: (id: string) => Promise<void>; refreshStories: () => Promise<void>; getStory: (id: string) => Story | undefined; categoryStories: (slug: string) => Story[]; };
 const NewsContext = createContext<NewsContextValue | null>(null);
 
 export function NewsProvider({ children }: { children: ReactNode }) {
@@ -26,8 +25,13 @@ export function NewsProvider({ children }: { children: ReactNode }) {
     }).catch((error) => console.error("Unable to load stories from Supabase", error)).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [user]);
-  const stories = useMemo(() => [...allStories.filter((story) => !deletedIds.includes(story.id)), ...customStories], [customStories, deletedIds]);
+  const stories = useMemo(() => customStories.filter((story) => !deletedIds.includes(story.id)), [customStories, deletedIds]);
   const newsStories = useMemo(() => stories.filter((story) => story.placement !== "for-you"), [stories]);
+  async function refreshStories() {
+    if (!backendConfigured) return;
+    const rows = await backend.rows<DbStory>("stories", "select=*&status=eq.published&order=created_at.desc");
+    setCustomStories(rows.map((story) => ({ ...story, time: story.created_at ? new Date(story.created_at).toLocaleDateString() : story.time })));
+  }
   async function addStory(input: NewStoryInput) {
     const draft: Story = { id: crypto.randomUUID(), title: input.title.trim(), excerpt: input.excerpt?.trim() || undefined, category: input.category, time: "Just now", seed: Math.floor(Math.random() * 50) + 1, badge: input.badge, author: input.author?.trim() || user?.display_name || "GTN Newsroom", media: input.media, placement: input.placement };
     if (!backendConfigured) throw new Error("Connect Supabase before publishing stories.");
@@ -43,6 +47,6 @@ export function NewsProvider({ children }: { children: ReactNode }) {
   }
   function getStory(id: string) { return stories.find((story) => story.id === id); }
   function categoryStories(slug: string) { return stories.filter((story) => slugify(story.category) === slug && story.placement !== "for-you"); }
-  return <NewsContext.Provider value={{ stories, newsStories, customStories, deletedIds, loading, addStory, updateStory, deleteStory, getStory, categoryStories }}>{children}</NewsContext.Provider>;
+  return <NewsContext.Provider value={{ stories, newsStories, customStories, deletedIds, loading, addStory, updateStory, deleteStory, refreshStories, getStory, categoryStories }}>{children}</NewsContext.Provider>;
 }
 export function useNews() { const context = useContext(NewsContext); if (!context) throw new Error("useNews must be used within a NewsProvider"); return context; }

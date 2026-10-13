@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
-import { Link, Navigate, NavLink, useLocation } from "react-router-dom";
+import { Link, Navigate, NavLink, useLocation, useNavigate } from "react-router-dom";
 import AuthPanel from "../components/AuthPanel";
-import { CATEGORIES, slugify, slugToLabel } from "../data/categories";
+import { slugify, slugToLabel } from "../data/categories";
 import { mediaError, VIDEO_ACCEPT, VIDEO_MAX_MB } from "../data/media";
 import type { StoryMedia } from "../data/media";
 import type { Badge, Placement } from "../data/news";
@@ -12,23 +12,29 @@ import type { AdMedia } from "../store/AdsContext";
 import { useAuth } from "../store/AuthContext";
 import type { StaffUser } from "../store/AuthContext";
 import { useNews } from "../store/NewsContext";
+import { useCategories } from "../store/CategoriesContext";
+import { PERMISSION_LABELS, type PermissionKey, type ReporterPermissions, usePermissions } from "../store/PermissionsContext";
 
 const BADGES: (Badge | "")[] = ["", "live", "video", "analysis", "exclusive"];
 
 type MediaKind = "none" | "image" | "video" | "youtube" | "tiktok";
 type AdKind = "text" | "image" | "video";
+type SiteCategory = { id: string; name: string; slug: string; sort_order: number };
 
 export default function AdminPage() {
   const location = useLocation();
+  const navigate = useNavigate();
   const activePage = location.pathname.split("/")[2] || "dashboard";
   const { user, signOut, inviteReporter, manageStaff, loading, invitationPending } = useAuth();
-  const { stories, customStories, addStory, updateStory, deleteStory } =
+  const { stories, customStories, addStory, updateStory, deleteStory, refreshStories } =
     useNews();
+  const { categories: newsCategories, refreshCategories } = useCategories();
+  const { permissions, loading: permissionsLoading, can, save: savePermissions } = usePermissions();
   const { ads, addAd, deleteAd } = useAds();
 
   const [title, setTitle] = useState("");
   const [excerpt, setExcerpt] = useState("");
-  const [category, setCategory] = useState(CATEGORIES[0]);
+  const [category, setCategory] = useState("News");
   const [author, setAuthor] = useState("");
   const [badge, setBadge] = useState<Badge | "">("");
   const [mediaKind, setMediaKind] = useState<MediaKind>("none");
@@ -46,6 +52,10 @@ export default function AdminPage() {
   const [staff, setStaff] = useState<StaffUser[]>([]);
   const [staffLoaded, setStaffLoaded] = useState(false);
   const [staffError, setStaffError] = useState("");
+  const [categoryRows, setCategoryRows] = useState<SiteCategory[]>([]);
+  const [newCategory, setNewCategory] = useState("");
+  const [editingCategory, setEditingCategory] = useState<string | null>(null);
+  const [categoryError, setCategoryError] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const [adHeadline, setAdHeadline] = useState("");
@@ -58,14 +68,27 @@ export default function AdminPage() {
   const [adMediaNote, setAdMediaNote] = useState("");
 
   useEffect(() => {
-    if (!user || user.role !== "super_admin" || activePage !== "staff") return;
+    if (newsCategories.length && !newsCategories.includes(category)) setCategory(newsCategories[0]);
+  }, [newsCategories, category]);
+
+  useEffect(() => {
+    if (!user || activePage !== "staff" || (user.role !== "super_admin" && !can("manage_staff"))) return;
     let active = true;
     backend.rows<StaffUser>("staff_profiles", "select=id,email,role,display_name,is_active&order=created_at.asc")
       .then((rows) => { if (active) { setStaff(rows); setStaffError(""); } })
       .catch((cause) => { if (active) setStaffError(cause instanceof Error ? cause.message : "Could not load staff accounts."); })
       .finally(() => { if (active) setStaffLoaded(true); });
     return () => { active = false; };
-  }, [user, activePage]);
+  }, [user, activePage, can]);
+
+  useEffect(() => {
+    if (!user || activePage !== "categories" || (user.role !== "super_admin" && !can("manage_categories"))) return;
+    let active = true;
+    backend.rows<SiteCategory>("site_categories", "select=id,name,slug,sort_order&order=sort_order.asc,name.asc")
+      .then((rows) => { if (active) { setCategoryRows(rows); setCategoryError(""); } })
+      .catch((cause) => { if (active) setCategoryError(cause instanceof Error ? cause.message : "Could not load categories."); });
+    return () => { active = false; };
+  }, [user, activePage, can]);
 
   if (loading) return <main className="container main"><p className="empty">Loading staff workspace…</p></main>;
   if (!user || invitationPending) {
@@ -80,16 +103,26 @@ export default function AdminPage() {
     );
   }
   const isSuperAdmin = user.role === "super_admin";
-  if (isSuperAdmin && !["dashboard", "stories", "staff", "roles", "advertising"].includes(activePage)) {
+  if (!isSuperAdmin && permissionsLoading) return <main className="container main"><p className="empty">Loading reporter permissions…</p></main>;
+  if (activePage === "stories") return <Navigate to="/admin/add-story" replace />;
+  if (isSuperAdmin && !["dashboard", "add-story", "my-stories", "staff", "roles", "categories", "advertising"].includes(activePage)) {
     return <Navigate to="/admin/dashboard" replace />;
   }
-  if (!isSuperAdmin && !["dashboard", "stories"].includes(activePage)) {
-    return <Navigate to="/admin/dashboard" replace />;
+  const reporterPages = [
+    ...(can("dashboard_view") ? ["dashboard"] : []),
+    ...(can("publish_stories") ? ["add-story"] : []),
+    ...(can("manage_own_stories") || can("manage_all_stories") ? ["my-stories"] : []),
+    ...(can("manage_categories") ? ["categories"] : []),
+    ...(can("manage_staff") ? ["staff"] : []),
+    ...(can("manage_ads") ? ["advertising"] : []),
+  ];
+  if (!isSuperAdmin && !reporterPages.includes(activePage)) {
+    return <main className="container main"><p className="empty">This workspace feature is unavailable for your account. Contact the Super Admin if you need access.</p></main>;
   }
 
   const term = appliedQuery.trim().toLowerCase();
   const myStories = customStories.filter((story) => (story as typeof story & { reporter_id?: string }).reporter_id === user.id);
-  const managedStories = isSuperAdmin ? stories : myStories;
+  const managedStories = isSuperAdmin || can("manage_all_stories") ? stories : myStories;
   const visible = managedStories.filter(
     (story) =>
       !term ||
@@ -208,6 +241,7 @@ export default function AdminPage() {
 
   function editStory(story: (typeof stories)[number]) {
     setEditingId(story.id); setTitle(story.title); setExcerpt(story.excerpt || ""); setCategory(story.category); setAuthor(story.author || ""); setBadge(story.badge || ""); setMediaKind(story.media?.type || "none"); setMediaUrl(story.media?.url || ""); setImageData(story.media?.type === "image" ? story.media.url : ""); setPlacement(story.placement || "");
+    navigate("/admin/add-story");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -225,6 +259,61 @@ export default function AdminPage() {
       setStaff(await backend.rows<StaffUser>("staff_profiles", "select=id,email,role,display_name,is_active&order=created_at.asc"));
       setFlash(`${member.display_name || member.email} ${action === "delete" ? "was deleted" : action === "deactivate" ? "was deactivated" : "was reactivated"}.`);
     } catch (cause) { setFlash(cause instanceof Error ? cause.message : `Could not ${verb} this account.`); }
+  }
+
+  async function loadCategoryRows() {
+    const rows = await backend.rows<SiteCategory>("site_categories", "select=id,name,slug,sort_order&order=sort_order.asc,name.asc");
+    setCategoryRows(rows);
+    await refreshCategories();
+  }
+
+  async function saveCategory(event: FormEvent) {
+    event.preventDefault();
+    const name = newCategory.trim();
+    if (!name) return setCategoryError("Enter a category name.");
+    const duplicate = categoryRows.some((row) => row.name.toLowerCase() === name.toLowerCase() && row.id !== editingCategory);
+    if (duplicate) return setCategoryError("A category with that name already exists.");
+    setCategoryError("");
+    try {
+      if (editingCategory) {
+        const current = categoryRows.find((row) => row.id === editingCategory);
+        if (!current) throw new Error("Category not found.");
+        if (current.name !== name) {
+          await backend.rpc("rename_site_category", { p_category_id: current.id, p_name: name, p_slug: slugify(name) });
+          await refreshStories();
+          if (category === current.name) setCategory(name);
+        }
+        setFlash(`Category “${name}” updated.`);
+      } else {
+        const nextOrder = Math.max(0, ...categoryRows.map((row) => row.sort_order)) + 1;
+        await backend.insert("site_categories", { name, slug: slugify(name), sort_order: nextOrder });
+        setFlash(`Category “${name}” added.`);
+      }
+      await loadCategoryRows();
+      setNewCategory("");
+      setEditingCategory(null);
+    } catch (cause) { setCategoryError(cause instanceof Error ? cause.message : "Could not save category."); }
+  }
+
+  async function deleteCategory(row: SiteCategory) {
+    if (categoryRows.length <= 1) return setCategoryError("Keep at least one news category available.");
+    if (!window.confirm(`Delete “${row.name}”? Existing stories will keep this category name.`)) return;
+    setCategoryError("");
+    try {
+      await backend.remove("site_categories", `id=eq.${encodeURIComponent(row.id)}`);
+      const remaining = await backend.rows<SiteCategory>("site_categories", "select=id,name,slug,sort_order&order=sort_order.asc,name.asc");
+      setCategoryRows(remaining);
+      await refreshCategories();
+      if (category === row.name) setCategory(remaining[0]?.name || "News");
+      if (editingCategory === row.id) { setEditingCategory(null); setNewCategory(""); }
+      setFlash(`Category “${row.name}” deleted.`);
+    } catch (cause) { setCategoryError(cause instanceof Error ? cause.message : "Could not delete category."); }
+  }
+
+  function startCategoryEdit(row: SiteCategory) {
+    setEditingCategory(row.id);
+    setNewCategory(row.name);
+    setCategoryError("");
   }
 
   async function onAdImageChange(event: ChangeEvent<HTMLInputElement>) {
@@ -306,21 +395,25 @@ export default function AdminPage() {
   }
 
   return (
-    <main className={`container main${isSuperAdmin ? " owner-admin" : ""}`}>
-      {isSuperAdmin && <aside className="owner-sidebar" aria-label="Super Admin navigation">
-        <div className="owner-sidebar__identity"><span className="owner-sidebar__eyebrow">GTN WORKSPACE</span><strong>Super Admin</strong><small>Owner controls</small></div>
+    <main className="container main owner-admin">
+      <aside className="owner-sidebar" aria-label={isSuperAdmin ? "Super Admin navigation" : "Reporter navigation"}>
+        <div className="owner-sidebar__identity"><span className="owner-sidebar__eyebrow">GTN WORKSPACE</span><strong>{isSuperAdmin ? "Super Admin" : "Reporter Desk"}</strong><small>{isSuperAdmin ? "Owner controls" : "Your editorial workspace"}</small></div>
         <nav className="owner-sidebar__nav">
-          <NavLink to="/admin/dashboard" end className={({isActive})=>isActive?"owner-sidebar__link owner-sidebar__link--active":"owner-sidebar__link"}><span className="owner-sidebar__icon">⌂</span>Dashboard</NavLink>
-          <NavLink to="/admin/stories" className={({isActive})=>isActive?"owner-sidebar__link owner-sidebar__link--active":"owner-sidebar__link"}><span className="owner-sidebar__icon">＋</span>Add Story</NavLink>
-          <NavLink to="/admin/staff" className={({isActive})=>isActive?"owner-sidebar__link owner-sidebar__link--active":"owner-sidebar__link"}><span className="owner-sidebar__icon">♙</span>Add Staff</NavLink>
+          {(isSuperAdmin || can("dashboard_view")) && <NavLink to="/admin/dashboard" end className={({isActive})=>isActive?"owner-sidebar__link owner-sidebar__link--active":"owner-sidebar__link"}><span className="owner-sidebar__icon">⌂</span>Dashboard</NavLink>}
+          {(isSuperAdmin || can("publish_stories")) && <NavLink to="/admin/add-story" className={({isActive})=>isActive?"owner-sidebar__link owner-sidebar__link--active":"owner-sidebar__link"}><span className="owner-sidebar__icon">＋</span>Add Story</NavLink>}
+          {(isSuperAdmin || can("manage_own_stories") || can("manage_all_stories")) && <NavLink to="/admin/my-stories" className={({isActive})=>isActive?"owner-sidebar__link owner-sidebar__link--active":"owner-sidebar__link"}><span className="owner-sidebar__icon">▤</span>{isSuperAdmin || can("manage_all_stories") ? "Manage Stories" : "My Stories"}</NavLink>}
+          {(isSuperAdmin || can("manage_staff")) && <NavLink to="/admin/staff" className={({isActive})=>isActive?"owner-sidebar__link owner-sidebar__link--active":"owner-sidebar__link"}><span className="owner-sidebar__icon">♙</span>Add Staff</NavLink>}
+          {(isSuperAdmin || can("manage_categories")) && <NavLink to="/admin/categories" className={({isActive})=>isActive?"owner-sidebar__link owner-sidebar__link--active":"owner-sidebar__link"}><span className="owner-sidebar__icon">▦</span>News Categories</NavLink>}
+          {isSuperAdmin && <>
           <NavLink to="/admin/roles" className={({isActive})=>isActive?"owner-sidebar__link owner-sidebar__link--active":"owner-sidebar__link"}><span className="owner-sidebar__icon">♧</span>Roles &amp; Permissions</NavLink>
-          <NavLink to="/admin/advertising" className={({isActive})=>isActive?"owner-sidebar__link owner-sidebar__link--active":"owner-sidebar__link"}><span className="owner-sidebar__icon">▣</span>Advertising</NavLink>
+          <NavLink to="/admin/advertising" className={({isActive})=>isActive?"owner-sidebar__link owner-sidebar__link--active":"owner-sidebar__link"}><span className="owner-sidebar__icon">▣</span>Advertising</NavLink></>}
+          {!isSuperAdmin && can("manage_ads") && <NavLink to="/admin/advertising" className={({isActive})=>isActive?"owner-sidebar__link owner-sidebar__link--active":"owner-sidebar__link"}><span className="owner-sidebar__icon">▣</span>Advertising</NavLink>}
         </nav>
-        <div className="owner-sidebar__footer"><span className="owner-sidebar__status" /> Owner access enabled</div>
-      </aside>}
+        <div className="owner-sidebar__footer"><span className="owner-sidebar__status" /> {isSuperAdmin ? "Owner access enabled" : "Reporter access enabled"}</div>
+      </aside>
       <div className="owner-content">
-      {isSuperAdmin && <div className="owner-page-heading"><div><span className="owner-sidebar__eyebrow">CONTROL CENTER</span><h1>{({dashboard:"Dashboard",stories:"Add Story",staff:"Add Staff",roles:"Roles & Permissions",advertising:"Advertising"} as Record<string,string>)[activePage] || "Dashboard"}</h1><p>Manage publishing, staff access, and advertising from one place.</p></div><span className="owner-page-heading__badge">OWNER</span></div>}
-      {(activePage === "dashboard" || !isSuperAdmin) && <section id="admin-dashboard" className="owner-section">
+      <div className="owner-page-heading"><div><span className="owner-sidebar__eyebrow">{isSuperAdmin ? "CONTROL CENTER" : "EDITORIAL WORKSPACE"}</span><h1>{isSuperAdmin ? ({dashboard:"Dashboard", "add-story":"Add Story", "my-stories":"Manage Stories",staff:"Add Staff",categories:"News Categories",roles:"Roles & Permissions",advertising:"Advertising"} as Record<string,string>)[activePage] || "Dashboard" : ({dashboard:"Reporter Dashboard", "add-story":"Add Story", "my-stories":"My Stories",categories:"News Categories",staff:"Add Staff",advertising:"Advertising"} as Record<string,string>)[activePage] || "Reporter Dashboard"}</h1><p>{isSuperAdmin ? "Manage publishing, staff access, categories, and advertising." : "Publish stories and manage your own reporting."}</p></div><span className="owner-page-heading__badge">{isSuperAdmin ? "OWNER" : "REPORTER"}</span></div>
+      {(activePage === "dashboard" && (isSuperAdmin || can("dashboard_view"))) && <section id="admin-dashboard" className="owner-section">
       <div className="cat-head cat-head--split">
         <div>
           <h1>Editorial Desk</h1>
@@ -332,7 +425,7 @@ export default function AdminPage() {
       </div>
 
       <div className="chips">
-        {CATEGORIES.map((cat) => {
+        {newsCategories.map((cat) => {
           const count = stories.filter(
             (story) => story.category === cat,
           ).length;
@@ -365,11 +458,12 @@ export default function AdminPage() {
         <section className="owner-published-card"><header><div><span className="owner-section__eyebrow">EDITORIAL</span><h2>Stories Published</h2></div><strong>{stories.length}</strong></header><ul className="owner-published-card__list owner-published-card__list--scroll">{stories.map((story)=><li key={story.id}><Link to={`/story/${story.id}`}>{story.title}</Link><span>{story.category}</span></li>)}</ul>{stories.length===0&&<p className="admin__note">No published stories yet.</p>}</section>
         <section className="owner-published-card"><header><div><span className="owner-section__eyebrow">MONETIZATION</span><h2>Ads Published</h2></div><strong>{ads.length}</strong></header><ul>{ads.slice(0,5).map((ad)=><li key={ad.id}><span>{ad.headline}</span><span>{ad.target ? adTargetLabel(ad.target) : "All sections"}</span></li>)}</ul>{ads.length===0&&<p className="admin__note">No active ads published yet.</p>}</section>
       </div>}
+      {!isSuperAdmin && <div className="owner-published-content"><section className="owner-published-card"><header><div><span className="owner-section__eyebrow">MY EDITORIAL WORK</span><h2>Stories Published</h2></div><strong>{myStories.length}</strong><Link className="admin__edit" to="/admin/add-story">Add story</Link></header>{myStories.length ? <ul className="owner-published-card__list owner-published-card__list--scroll">{myStories.map((story)=><li key={story.id}><Link to={`/story/${story.id}`}>{story.title}</Link><span>{story.category} · {story.time}</span></li>)}</ul> : <p className="admin__note">You have not published any stories yet. Use Add Story to publish your first one.</p>}</section></div>}
       </section>}
 
       {flash && <p className="flash">{flash}</p>}
 
-      {isSuperAdmin && activePage === "staff" && <>
+      {(isSuperAdmin || can("manage_staff")) && activePage === "staff" && <>
         <section id="admin-add-staff" className="admin__panel admin__panel--full owner-section" aria-label="Add staff">
           <div className="owner-section__heading"><span className="owner-section__eyebrow">TEAM MANAGEMENT</span><h2>Add Staff</h2></div>
           <p className="form__hint">Create a staff account. The reporter receives a secure email invitation to set their own password.</p>
@@ -386,10 +480,24 @@ export default function AdminPage() {
         </section>
       </>}
 
-      {isSuperAdmin && activePage === "roles" && <section id="admin-roles" className="admin__panel admin__panel--full owner-section" aria-label="Roles and permissions"><div className="owner-section__heading"><span className="owner-section__eyebrow">ACCESS CONTROL</span><h2>Roles &amp; Permissions</h2></div><p className="form__hint">GTN staff access is assigned by role. Invite staff from the Add Staff section; super admin access is reserved for the site owner.</p><div className="owner-role-grid"><article><span className="owner-role-grid__mark owner-role-grid__mark--owner">SA</span><div><h3>Super Admin</h3><p>Full owner access to editorial publishing, staff invitations, and advertising.</p></div><span className="owner-role-grid__tag">Full access</span></article><article><span className="owner-role-grid__mark">RP</span><div><h3>Reporter</h3><p>Submit stories to the editorial desk and manage assigned reporting work.</p></div><span className="owner-role-grid__tag">Editorial</span></article></div></section>}
+      {(isSuperAdmin || can("manage_categories")) && activePage === "categories" && <>
+        <section className="admin__panel admin__panel--full owner-section" aria-label="Add or edit news category">
+          <div className="owner-section__heading"><span className="owner-section__eyebrow">SITE CONTENT</span><h2>{editingCategory ? "Edit Category" : "Add News Category"}</h2></div>
+          <p className="form__hint">Categories appear in the public news navigation and the story publishing form. Renaming a category also updates stories assigned to it.</p>
+          <form className="form" onSubmit={saveCategory}><label><span>Category name</span><input value={newCategory} onChange={(event)=>setNewCategory(event.target.value)} placeholder="e.g. Health" maxLength={50} required /></label><div className="admin__form-actions"><button className="btn" type="submit">{editingCategory ? "Save category" : "Add category"}</button>{editingCategory && <button className="admin__edit" type="button" onClick={()=>{setEditingCategory(null);setNewCategory("");setCategoryError("");}}>Cancel</button>}</div></form>
+          {categoryError && <p className="form__hint form__hint--error">{categoryError}</p>}
+        </section>
+        <section className="admin__panel admin__panel--full owner-section" aria-label="Available news categories">
+          <div className="owner-section__heading"><span className="owner-section__eyebrow">CATEGORY DIRECTORY</span><h2>Available News Categories <span className="owner-category-count">{categoryRows.length || newsCategories.length}</span></h2></div>
+          <ul className="admin__list">{categoryRows.map((row)=><li className="admin__item" key={row.id}><div><span className="admin__item-title">{row.name}</span><span className="admin__item-meta">/{row.slug}</span></div><div className="admin__actions"><button className="admin__edit" type="button" onClick={()=>startCategoryEdit(row)}>Edit</button><button className="admin__delete" type="button" onClick={()=>void deleteCategory(row)}>Delete</button></div></li>)}</ul>
+          {!categoryRows.length && <ul className="admin__list">{newsCategories.map((name)=><li className="admin__item" key={name}><div><span className="admin__item-title">{name}</span><span className="admin__item-meta">Category list is loading from Supabase or using built-in defaults.</span></div></li>)}</ul>}
+        </section>
+      </>}
 
-      {(activePage === "stories" || !isSuperAdmin) && <div className="admin">
-        <section id={isSuperAdmin ? "admin-add-story" : undefined} className="admin__panel owner-section" aria-label="Add story">
+      {isSuperAdmin && activePage === "roles" && <section id="admin-roles" className="admin__panel admin__panel--full owner-section" aria-label="Roles and permissions"><div className="owner-section__heading"><span className="owner-section__eyebrow">ACCESS CONTROL</span><h2>Roles &amp; Permissions</h2></div><p className="form__hint">Choose which workspace features reporters can use. Super Admin keeps full owner access. Changes apply to all reporter accounts.</p><div className="owner-role-grid"><article><span className="owner-role-grid__mark owner-role-grid__mark--owner">SA</span><div><h3>Super Admin</h3><p>Full access to every feature and permission.</p></div><span className="owner-role-grid__tag">Full access</span></article></div><h3>Reporter permissions</h3><div className="permission-list">{(Object.keys(PERMISSION_LABELS) as PermissionKey[]).map((key)=><label className="permission-list__item" key={key}><span>{PERMISSION_LABELS[key]}</span><input type="checkbox" checked={permissions[key]} disabled={permissionsLoading} onChange={async (event)=>{const next: ReporterPermissions={...permissions,[key]:event.target.checked};try{await savePermissions(next);setFlash("Reporter permissions updated.");}catch(cause){setFlash(cause instanceof Error?cause.message:"Could not save reporter permissions.");}}}/></label>)}</div></section>}
+
+      {(activePage === "add-story" || activePage === "my-stories") && <div className="admin admin--single">
+        {activePage === "add-story" && <section id="admin-add-story" className="admin__panel owner-section" aria-label="Add story">
           <h2>{editingId ? "Edit story" : isSuperAdmin ? "Publish a story" : "Submit a story"}</h2>
           <form className="form" onSubmit={onSubmit}>
             <label>
@@ -418,7 +526,7 @@ export default function AdminPage() {
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
                 >
-                  {CATEGORIES.map((cat) => (
+                  {newsCategories.map((cat) => (
                     <option key={cat} value={cat}>
                       {cat}
                     </option>
@@ -571,9 +679,9 @@ export default function AdminPage() {
 
             <div className="admin__form-actions"><button className="btn" type="submit">{editingId ? "Save changes" : "Publish story"}</button>{editingId && <button className="admin__edit" type="button" onClick={resetForm}>Cancel edit</button>}</div>
           </form>
-        </section>
+        </section>}
 
-        <section className="admin__panel owner-section" aria-label="Manage stories">
+        {activePage === "my-stories" && <section className="admin__panel owner-section" aria-label="Manage stories">
           <h2>{isSuperAdmin ? "Editorial management" : "Your stories"}</h2>
           <form className="form__search owner-story-search" onSubmit={(event) => { event.preventDefault(); setAppliedQuery(query); }}>
             <label htmlFor="story-search">Find a story</label>
@@ -588,7 +696,7 @@ export default function AdminPage() {
           <ul className="admin__list admin__list--scroll-15">
             {visible.map((story) => {
               const storedStory = customStories.find((item) => item.id === story.id) as (typeof story & { reporter_id?: string }) | undefined;
-              const canManage = Boolean(storedStory && (isSuperAdmin || storedStory.reporter_id === user.id));
+              const canManage = Boolean(storedStory && (isSuperAdmin || can("manage_all_stories") || (can("manage_own_stories") && storedStory.reporter_id === user.id)));
               return <li className="admin__item" key={story.id}>
                 <div>
                   <Link className="admin__item-title" to={`/story/${story.id}`}>
@@ -620,10 +728,10 @@ export default function AdminPage() {
               </li>
             })}
           </ul>
-        </section>
+        </section>}
       </div>}
 
-      {isSuperAdmin && activePage === "advertising" && <section id="admin-advertising" className="admin__panel admin__panel--full owner-section"
+      {(isSuperAdmin || can("manage_ads")) && activePage === "advertising" && <section id="admin-advertising" className="admin__panel admin__panel--full owner-section"
         aria-label="Manage ads"
       >
         <h2>Advertising</h2>
@@ -669,7 +777,7 @@ export default function AdminPage() {
               <option value="">All sections</option>
               <option value="home">Home (For You)</option>
               <option value="news">News page</option>
-              {CATEGORIES.map((cat) => (
+              {newsCategories.map((cat) => (
                 <option key={cat} value={slugify(cat)}>
                   {cat}
                 </option>

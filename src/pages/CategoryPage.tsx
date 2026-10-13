@@ -3,16 +3,18 @@ import AdSlot from "../components/AdSlot";
 import CategoryTabs from "../components/CategoryTabs";
 import StoryCard from "../components/StoryCard";
 import StoryImage from "../components/StoryImage";
-import { slugToLabel } from "../data/categories";
+import { slugToLabel, slugify } from "../data/categories";
 import { channelUrl } from "../data/videos";
 import { useNews } from "../store/NewsContext";
+import { useCategories } from "../store/CategoriesContext";
 
 export default function CategoryPage() {
   const { slug = "" } = useParams();
   const { categoryStories } = useNews();
+  const { categories } = useCategories();
 
   const items = categoryStories(slug);
-  const label = slugToLabel(slug);
+  const label = categories.find((category) => slugify(category) === slug) || slugToLabel(slug);
   const [first, ...rest] = items;
 
   return (

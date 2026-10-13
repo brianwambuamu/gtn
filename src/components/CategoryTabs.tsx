@@ -1,7 +1,9 @@
 import { NavLink } from "react-router-dom";
-import { CATEGORIES, slugify } from "../data/categories";
+import { slugify } from "../data/categories";
+import { useCategories } from "../store/CategoriesContext";
 
 export default function CategoryTabs() {
+  const {categories} = useCategories();
   const linkClass = ({ isActive }: { isActive: boolean }) =>
     `subnav__link${isActive ? " subnav__link--active" : ""}`;
 
@@ -11,7 +13,7 @@ export default function CategoryTabs() {
         <NavLink to="/news" end className={linkClass}>
           News
         </NavLink>
-        {CATEGORIES.map((cat) =>
+        {categories.map((cat) =>
           cat === "News" ? null : (
             <NavLink
               key={cat}
