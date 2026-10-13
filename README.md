@@ -15,7 +15,7 @@ React/Vite news site with Supabase for shared stories, staff authentication, ad 
    ```
 
 4. Configure an SMTP sender in Supabase Auth so invitations can be delivered. Add the deployed site URL to Auth URL Configuration's allowed redirect URLs.
-5. Deploy the `invite-reporter` Edge Function (`supabase functions deploy invite-reporter`) and set `APP_URL` to the production site URL as a function secret. The function uses Supabase's injected service role secret server-side to invite accounts; it verifies the caller is a super admin before issuing invitations.
+5. Deploy the `invite-reporter` Edge Function (`supabase functions deploy invite-reporter`). Set `APP_URL` to the production site URL as a function secret (no trailing slash); it controls where invite links return. The function uses Supabase's injected service role secret server-side to invite accounts; it verifies the caller is a super admin before issuing invitations.
 6. Deploy the Vite app with `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` set in the hosting provider's build environment.
 
 The reporter invitation email contains a secure password setup link. The app never emails or stores a reporter's plaintext password. The super admin role is granted in the database and cannot be self-assigned from the browser.

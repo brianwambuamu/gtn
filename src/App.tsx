@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import "./App.css";
 import BreakingTicker from "./components/BreakingTicker";
 import Footer from "./components/Footer";
@@ -11,9 +11,12 @@ import ForYouPage from "./pages/ForYouPage";
 import NewsPage from "./pages/NewsPage";
 import StoryPage from "./pages/StoryPage";
 import TvPage from "./pages/TvPage";
+import { useAuth } from "./store/AuthContext";
 
 export default function App() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { invitationPending } = useAuth();
   const [entry, setEntry] = useState<{ path: string; query: string }>({
     path: location.pathname,
     query: "",
@@ -22,6 +25,12 @@ export default function App() {
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [location.pathname]);
+
+  useEffect(() => {
+    if (invitationPending && location.pathname !== "/admin") {
+      navigate("/admin", { replace: true });
+    }
+  }, [invitationPending, location.pathname, navigate]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {

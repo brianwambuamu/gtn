@@ -16,10 +16,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let active = true;
     async function load() {
+      const query = new URLSearchParams(window.location.search);
       const params = new URLSearchParams(window.location.hash.replace(/^#/, ""));
       const token = params.get("access_token");
       let session = getSession();
-      if (token && ["invite", "recovery"].includes(params.get("type") || "")) {
+      const tokenHash = query.get("token_hash");
+      const type = query.get("type");
+      if (tokenHash && ["invite", "recovery"].includes(type || "")) {
+        try {
+          session = await backend.auth("verify", { token_hash: tokenHash, type });
+          saveSession(session);
+          setInvitationPending(true);
+          window.history.replaceState(null, "", window.location.pathname);
+        } catch (cause) {
+          if (active) setError(cause instanceof Error ? cause.message : "The invitation link could not be verified.");
+        }
+      } else if (token && ["invite", "recovery"].includes(params.get("type") || "")) {
         try {
           const claims = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
           session = { access_token: token, refresh_token: params.get("refresh_token") || undefined, user: { id: claims.sub, email: claims.email } };
