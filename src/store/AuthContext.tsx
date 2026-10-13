@@ -4,8 +4,8 @@ import type { ReactNode } from "react";
 import { backend, backendConfigured, getSession, saveSession } from "../lib/backend";
 
 export type StaffRole = "super_admin" | "reporter";
-export type StaffUser = { id: string; email: string; role: StaffRole; display_name: string };
-type AuthValue = { user: StaffUser | null; loading: boolean; error: string; configured: boolean; invitationPending: boolean; completeInvitation: (password: string) => Promise<void>; signIn: (email: string, password: string) => Promise<void>; signOut: () => Promise<void>; inviteReporter: (email: string, displayName: string) => Promise<void> };
+export type StaffUser = { id: string; email: string; role: StaffRole; display_name: string; is_active: boolean };
+type AuthValue = { user: StaffUser | null; loading: boolean; error: string; configured: boolean; invitationPending: boolean; completeInvitation: (password: string) => Promise<void>; signIn: (email: string, password: string) => Promise<void>; signOut: () => Promise<void>; inviteReporter: (email: string, displayName: string) => Promise<void>; manageStaff: (action:"delete"|"deactivate"|"activate", userId:string)=>Promise<void> };
 const AuthContext = createContext<AuthValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -40,8 +40,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       if (session) {
         try {
-          const rows = await backend.rows<StaffUser>("staff_profiles", "select=id,email,role,display_name&limit=1");
-          if (active) setUser(rows[0] || null);
+          const rows = await backend.rows<StaffUser>("staff_profiles", `select=id,email,role,display_name,is_active&id=eq.${session.user.id}&limit=1`);
+          if (rows[0] && !rows[0].is_active) { saveSession(null); if (active) setError("This staff account is inactive. Contact the Super Admin."); }
+          else if (active) setUser(rows[0] || null);
         } catch { saveSession(null); }
       }
       if (active) setLoading(false);
@@ -53,8 +54,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const session = await backend.auth("token?grant_type=password", { email: email.trim(), password });
       saveSession(session);
-      const profiles = await backend.rows<StaffUser>("staff_profiles", `select=id,email,role,display_name&id=eq.${session.user.id}&limit=1`);
+      const profiles = await backend.rows<StaffUser>("staff_profiles", `select=id,email,role,display_name,is_active&id=eq.${session.user.id}&limit=1`);
       if (!profiles[0]) { saveSession(null); throw new Error("This account has no staff role. Ask the super admin to invite you."); }
+      if (!profiles[0].is_active) { saveSession(null); throw new Error("This staff account is inactive. Contact the Super Admin."); }
       setUser(profiles[0]);
     } catch (cause) { const message = cause instanceof Error ? cause.message : "Sign in failed."; setError(message); throw new Error(message); }
   }
@@ -63,12 +65,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (password.length < 12) throw new Error("Choose a password with at least 12 characters.");
     await backend.changePassword(password);
     setInvitationPending(false);
-    const profiles = await backend.rows<StaffUser>("staff_profiles", "select=id,email,role,display_name&limit=1");
+    const session = getSession();
+    const profiles = session ? await backend.rows<StaffUser>("staff_profiles", `select=id,email,role,display_name,is_active&id=eq.${session.user.id}&limit=1`) : [];
     setUser(profiles[0] || null);
   }
   async function inviteReporter(email: string, displayName: string) {
     await backend.invoke("invite-reporter", { email: email.trim(), display_name: displayName.trim() });
   }
-  return <AuthContext.Provider value={{ user, loading, error, configured: backendConfigured, invitationPending, completeInvitation, signIn, signOut, inviteReporter }}>{children}</AuthContext.Provider>;
+  async function manageStaff(action:"delete"|"deactivate"|"activate", userId:string) {
+    await backend.invoke("invite-reporter", { action, user_id:userId });
+  }
+  return <AuthContext.Provider value={{ user, loading, error, configured: backendConfigured, invitationPending, completeInvitation, signIn, signOut, inviteReporter, manageStaff }}>{children}</AuthContext.Provider>;
 }
 export function useAuth() { const context = useContext(AuthContext); if (!context) throw new Error("useAuth must be used within an AuthProvider"); return context; }

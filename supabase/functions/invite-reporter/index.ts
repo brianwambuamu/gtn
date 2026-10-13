@@ -23,9 +23,36 @@ Deno.serve(async (request) => {
   const accessToken = authorization.replace(/^Bearer\s+/i, "");
   const { data: { user }, error: authError } = await admin.auth.getUser(accessToken);
   if (authError || !user) return json({ error: "Invalid session" }, 401, origin);
-  const { data: profile } = await admin.from("staff_profiles").select("role").eq("id", user.id).single();
-  if (profile?.role !== "super_admin") return json({ error: "Only super admins can invite reporters" }, 403, origin);
+  const { data: profile } = await admin.from("staff_profiles").select("role,is_active").eq("id", user.id).single();
+  if (profile?.role !== "super_admin" || !profile.is_active) return json({ error: "Only active super admins can manage staff" }, 403, origin);
   const body = await request.json().catch(() => ({}));
+  const action = body.action || "invite";
+  if (["delete", "deactivate", "activate"].includes(action)) {
+    const targetId = typeof body.user_id === "string" ? body.user_id : "";
+    if (!targetId) return json({ error: "Staff account is required" }, 400, origin);
+    if (targetId === user.id) return json({ error: "You cannot deactivate or delete your own account" }, 400, origin);
+    const { data: target } = await admin.from("staff_profiles").select("role,is_active").eq("id", targetId).maybeSingle();
+    if (!target) return json({ error: "Staff account not found" }, 404, origin);
+    if (target.role === "super_admin" && target.is_active && (action === "delete" || action === "deactivate")) {
+      const { count } = await admin.from("staff_profiles").select("id", { count: "exact", head: true }).eq("role", "super_admin").eq("is_active", true);
+      if ((count || 0) <= 1) return json({ error: "The last active super admin cannot be deactivated or deleted" }, 400, origin);
+    }
+    if (action === "delete") {
+      const { error } = await admin.auth.admin.deleteUser(targetId);
+      if (error) return json({ error: error.message }, 400, origin);
+      return json({ deleted: true }, 200, origin);
+    }
+    const isActive = action === "activate";
+    const { error: profileError } = await admin.from("staff_profiles").update({ is_active: isActive }).eq("id", targetId);
+    if (profileError) return json({ error: profileError.message }, 400, origin);
+    const { error: authUpdateError } = await admin.auth.admin.updateUserById(targetId, { ban_duration: isActive ? "none" : "876000h" });
+    if (authUpdateError) {
+      await admin.from("staff_profiles").update({ is_active: !isActive }).eq("id", targetId);
+      return json({ error: authUpdateError.message }, 400, origin);
+    }
+    return json({ active: isActive }, 200, origin);
+  }
+  if (action !== "invite") return json({ error: "Unknown staff action" }, 400, origin);
   const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
   const displayName = typeof body.display_name === "string" ? body.display_name.trim() : "";
   if (!email || !displayName) return json({ error: "Reporter name and email are required" }, 400, origin);

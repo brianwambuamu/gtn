@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import { Link, Navigate, NavLink, useLocation } from "react-router-dom";
 import AuthPanel from "../components/AuthPanel";
@@ -10,6 +10,7 @@ import { backend } from "../lib/backend";
 import { useAds } from "../store/AdsContext";
 import type { AdMedia } from "../store/AdsContext";
 import { useAuth } from "../store/AuthContext";
+import type { StaffUser } from "../store/AuthContext";
 import { useNews } from "../store/NewsContext";
 
 const BADGES: (Badge | "")[] = ["", "live", "video", "analysis", "exclusive"];
@@ -20,7 +21,7 @@ type AdKind = "text" | "image" | "video";
 export default function AdminPage() {
   const location = useLocation();
   const activePage = location.pathname.split("/")[2] || "dashboard";
-  const { user, signOut, inviteReporter, loading, invitationPending } = useAuth();
+  const { user, signOut, inviteReporter, manageStaff, loading, invitationPending } = useAuth();
   const { stories, customStories, addStory, updateStory, deleteStory } =
     useNews();
   const { ads, addAd, deleteAd } = useAds();
@@ -38,8 +39,13 @@ export default function AdminPage() {
   const [placement, setPlacement] = useState<Placement | "">("");
   const [flash, setFlash] = useState("");
   const [query, setQuery] = useState("");
+  const [appliedQuery, setAppliedQuery] = useState("");
+  const [openStoryMenu, setOpenStoryMenu] = useState<string | null>(null);
   const [reporterEmail, setReporterEmail] = useState("");
   const [reporterName, setReporterName] = useState("");
+  const [staff, setStaff] = useState<StaffUser[]>([]);
+  const [staffLoaded, setStaffLoaded] = useState(false);
+  const [staffError, setStaffError] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const [adHeadline, setAdHeadline] = useState("");
@@ -50,6 +56,16 @@ export default function AdminPage() {
   const [adVideoUrl, setAdVideoUrl] = useState("");
   const [adVideoName, setAdVideoName] = useState("");
   const [adMediaNote, setAdMediaNote] = useState("");
+
+  useEffect(() => {
+    if (!user || user.role !== "super_admin" || activePage !== "staff") return;
+    let active = true;
+    backend.rows<StaffUser>("staff_profiles", "select=id,email,role,display_name,is_active&order=created_at.asc")
+      .then((rows) => { if (active) { setStaff(rows); setStaffError(""); } })
+      .catch((cause) => { if (active) setStaffError(cause instanceof Error ? cause.message : "Could not load staff accounts."); })
+      .finally(() => { if (active) setStaffLoaded(true); });
+    return () => { active = false; };
+  }, [user, activePage]);
 
   if (loading) return <main className="container main"><p className="empty">Loading staff workspace…</p></main>;
   if (!user || invitationPending) {
@@ -71,7 +87,7 @@ export default function AdminPage() {
     return <Navigate to="/admin/dashboard" replace />;
   }
 
-  const term = query.trim().toLowerCase();
+  const term = appliedQuery.trim().toLowerCase();
   const myStories = customStories.filter((story) => (story as typeof story & { reporter_id?: string }).reporter_id === user.id);
   const managedStories = isSuperAdmin ? stories : myStories;
   const visible = managedStories.filter(
@@ -197,8 +213,18 @@ export default function AdminPage() {
 
   async function onInviteReporter(event: FormEvent) {
     event.preventDefault();
-    try { await inviteReporter(reporterEmail, reporterName); setFlash(`Secure invitation sent to ${reporterEmail}.`); setReporterEmail(""); setReporterName(""); }
+    try { await inviteReporter(reporterEmail, reporterName); setFlash(`Secure invitation sent to ${reporterEmail}.`); setReporterEmail(""); setReporterName(""); setStaff(await backend.rows<StaffUser>("staff_profiles", "select=id,email,role,display_name,is_active&order=created_at.asc")); }
     catch (cause) { setFlash(cause instanceof Error ? cause.message : "Could not invite reporter."); }
+  }
+
+  async function onStaffAction(member: StaffUser, action: "delete" | "deactivate" | "activate") {
+    const verb = action === "delete" ? "delete" : action === "deactivate" ? "deactivate" : "reactivate";
+    if (!window.confirm(`${verb[0].toUpperCase()}${verb.slice(1)} ${member.display_name || member.email}?`)) return;
+    try {
+      await manageStaff(action, member.id);
+      setStaff(await backend.rows<StaffUser>("staff_profiles", "select=id,email,role,display_name,is_active&order=created_at.asc"));
+      setFlash(`${member.display_name || member.email} ${action === "delete" ? "was deleted" : action === "deactivate" ? "was deactivated" : "was reactivated"}.`);
+    } catch (cause) { setFlash(cause instanceof Error ? cause.message : `Could not ${verb} this account.`); }
   }
 
   async function onAdImageChange(event: ChangeEvent<HTMLInputElement>) {
@@ -335,11 +361,30 @@ export default function AdminPage() {
         </div>
         {isSuperAdmin && <div className="stats__item"><b>{ads.length}</b><span>Live ads</span></div>}
       </div>
+      {isSuperAdmin && <div className="owner-published-content">
+        <section className="owner-published-card"><header><div><span className="owner-section__eyebrow">EDITORIAL</span><h2>Stories Published</h2></div><strong>{stories.length}</strong></header><ul className="owner-published-card__list owner-published-card__list--scroll">{stories.map((story)=><li key={story.id}><Link to={`/story/${story.id}`}>{story.title}</Link><span>{story.category}</span></li>)}</ul>{stories.length===0&&<p className="admin__note">No published stories yet.</p>}</section>
+        <section className="owner-published-card"><header><div><span className="owner-section__eyebrow">MONETIZATION</span><h2>Ads Published</h2></div><strong>{ads.length}</strong></header><ul>{ads.slice(0,5).map((ad)=><li key={ad.id}><span>{ad.headline}</span><span>{ad.target ? adTargetLabel(ad.target) : "All sections"}</span></li>)}</ul>{ads.length===0&&<p className="admin__note">No active ads published yet.</p>}</section>
+      </div>}
       </section>}
 
       {flash && <p className="flash">{flash}</p>}
 
-      {isSuperAdmin && activePage === "staff" && <section id="admin-add-staff" className="admin__panel admin__panel--full owner-section" aria-label="Add staff"><div className="owner-section__heading"><span className="owner-section__eyebrow">TEAM MANAGEMENT</span><h2>Add Staff</h2></div><p className="form__hint">Create a staff account. The reporter receives a secure email invitation to set their own password.</p><form className="form" onSubmit={onInviteReporter}><div className="admin__row"><label><span>Staff name</span><input value={reporterName} onChange={(e) => setReporterName(e.target.value)} required /></label><label><span>Work email</span><input type="email" value={reporterEmail} onChange={(e) => setReporterEmail(e.target.value)} required /></label></div><button className="btn" type="submit">Invite staff member</button></form></section>}
+      {isSuperAdmin && activePage === "staff" && <>
+        <section id="admin-add-staff" className="admin__panel admin__panel--full owner-section" aria-label="Add staff">
+          <div className="owner-section__heading"><span className="owner-section__eyebrow">TEAM MANAGEMENT</span><h2>Add Staff</h2></div>
+          <p className="form__hint">Create a staff account. The reporter receives a secure email invitation to set their own password.</p>
+          <form className="form" onSubmit={onInviteReporter}><div className="admin__row"><label><span>Staff name</span><input value={reporterName} onChange={(e) => setReporterName(e.target.value)} required /></label><label><span>Work email</span><input type="email" value={reporterEmail} onChange={(e) => setReporterEmail(e.target.value)} required /></label></div><button className="btn" type="submit">Invite staff member</button></form>
+        </section>
+        <section className="admin__panel admin__panel--full owner-section" aria-label="Staff accounts">
+          <div className="owner-section__heading"><span className="owner-section__eyebrow">STAFF DIRECTORY</span><h2>Staff Available</h2></div>
+          <div className="owner-staff-summary"><strong>{staff.filter((member) => member.is_active).length}</strong><span>active staff</span><strong>{staff.length}</strong><span>total accounts</span></div>
+          {staffError && <p className="form__hint form__hint--error">{staffError}</p>}
+          {!staffLoaded && !staff.length ? <p className="admin__note">Loading staff accounts…</p> : staff.length ? <ul className="admin__list">{staff.map((member) => <li className="admin__item owner-staff-item" key={member.id}>
+            <div><span className="admin__item-title">{member.display_name || "GTN staff"}{member.id === user.id && " · You"}</span><span className="admin__item-meta">{member.email} · {member.role.replace("_", " ")}</span></div>
+            <div className="owner-staff-item__actions"><span className={`owner-status ${member.is_active ? "owner-status--active" : "owner-status--inactive"}`}>{member.is_active ? "Active" : "Inactive"}</span>{member.id !== user.id && <><button className="admin__edit" type="button" onClick={() => void onStaffAction(member, member.is_active ? "deactivate" : "activate")}>{member.is_active ? "Deactivate" : "Reactivate"}</button><button className="admin__delete" type="button" onClick={() => void onStaffAction(member, "delete")}>Delete</button></>}</div>
+          </li>)}</ul> : <p className="admin__note">No staff accounts found.</p>}
+        </section>
+      </>}
 
       {isSuperAdmin && activePage === "roles" && <section id="admin-roles" className="admin__panel admin__panel--full owner-section" aria-label="Roles and permissions"><div className="owner-section__heading"><span className="owner-section__eyebrow">ACCESS CONTROL</span><h2>Roles &amp; Permissions</h2></div><p className="form__hint">GTN staff access is assigned by role. Invite staff from the Add Staff section; super admin access is reserved for the site owner.</p><div className="owner-role-grid"><article><span className="owner-role-grid__mark owner-role-grid__mark--owner">SA</span><div><h3>Super Admin</h3><p>Full owner access to editorial publishing, staff invitations, and advertising.</p></div><span className="owner-role-grid__tag">Full access</span></article><article><span className="owner-role-grid__mark">RP</span><div><h3>Reporter</h3><p>Submit stories to the editorial desk and manage assigned reporting work.</p></div><span className="owner-role-grid__tag">Editorial</span></article></div></section>}
 
@@ -530,19 +575,17 @@ export default function AdminPage() {
 
         <section className="admin__panel owner-section" aria-label="Manage stories">
           <h2>{isSuperAdmin ? "Editorial management" : "Your stories"}</h2>
-          <label className="form__search">
-            <span>Filter</span>
-            <input
-              type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search by title or category"
-            />
-          </label>
+          <form className="form__search owner-story-search" onSubmit={(event) => { event.preventDefault(); setAppliedQuery(query); }}>
+            <label htmlFor="story-search">Find a story</label>
+            <div className="form__search-controls">
+              <div className="owner-story-search__input-wrap"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 4.3 4.3"/></svg><input id="story-search" type="search" value={query} onChange={(e) => {setQuery(e.target.value);setAppliedQuery(e.target.value);}} placeholder="Search by headline or category" /></div>
+              {appliedQuery && <button className="owner-story-search__clear" type="button" onClick={() => {setQuery("");setAppliedQuery("");}}>Clear</button>}
+            </div>
+          </form>
           <p className="admin__count">
             Showing {visible.length} of {managedStories.length} stories
           </p>
-          <ul className="admin__list">
+          <ul className="admin__list admin__list--scroll-15">
             {visible.map((story) => {
               const storedStory = customStories.find((item) => item.id === story.id) as (typeof story & { reporter_id?: string }) | undefined;
               const canManage = Boolean(storedStory && (isSuperAdmin || storedStory.reporter_id === user.id));
@@ -573,7 +616,7 @@ export default function AdminPage() {
                     )}
                   </span>
                 </div>
-                {canManage && <div className="admin__actions"><button className="admin__edit" type="button" onClick={() => editStory(story)}>Edit</button><button className="admin__delete" type="button" onClick={() => onDelete(story.id)} aria-label={`Delete ${story.title}`}>Delete</button></div>}
+                {canManage && <div className="story-action-menu"><button className="story-action-menu__trigger" type="button" aria-label={`Actions for ${story.title}`} aria-haspopup="menu" aria-expanded={openStoryMenu === story.id} onClick={() => setOpenStoryMenu(openStoryMenu === story.id ? null : story.id)}><span aria-hidden="true">⋮</span></button>{openStoryMenu === story.id && <div className="story-action-menu__items" role="menu"><button type="button" role="menuitem" onClick={() => {setOpenStoryMenu(null);editStory(story);}}>Edit story</button><button className="story-action-menu__delete" type="button" role="menuitem" onClick={() => {setOpenStoryMenu(null);if(window.confirm(`Delete “${story.title}”? This cannot be undone.`))onDelete(story.id);}}>Delete story</button></div>}</div>}
               </li>
             })}
           </ul>
