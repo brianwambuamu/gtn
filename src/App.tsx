@@ -61,7 +61,8 @@ export default function App() {
         <Route path="/live-events" element={<Navigate to="/tv" replace />} />
         <Route path="/category/:slug" element={<CategoryPage />} />
         <Route path="/story/:id" element={<StoryPage />} />
-        <Route path="/admin" element={<AdminPage />} />
+        <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
+        <Route path="/admin/*" element={<AdminPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <Footer />

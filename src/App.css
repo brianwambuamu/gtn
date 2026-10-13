@@ -1521,6 +1521,8 @@
 .owner-sidebar__nav { display: grid; gap: 5px; padding-top: 16px; }
 .owner-sidebar__nav a { display: flex; align-items: center; gap: 11px; min-height: 43px; padding: 0 11px; border-radius: 9px; color: #586678; font-size: 13px; font-weight: 650; text-decoration: none; transition: background .16s, color .16s; }
 .owner-sidebar__nav a:hover, .owner-sidebar__nav a:focus-visible { background: #fff4eb; color: #d96313; outline: none; }
+.owner-sidebar__nav a.owner-sidebar__link--active { background: #fff1e5; color: #c85d16; }
+.owner-sidebar__nav a.owner-sidebar__link--active .owner-sidebar__icon { background: #ffe1c9; color: #c85d16; }
 .owner-sidebar__icon { display: grid; width: 23px; height: 23px; place-items: center; border-radius: 7px; background: #f3f5f8; color: #526176; font-size: 16px; }
 .owner-sidebar__nav a:hover .owner-sidebar__icon { background: #ffe5d2; color: #d96313; }
 .owner-sidebar__footer { display: flex; align-items: center; gap: 8px; margin-top: auto; padding: 15px 10px 6px; border-top: 1px solid #edf0f4; color: #718096; font-size: 11px; }
