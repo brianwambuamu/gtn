@@ -5,149 +5,44 @@ import { slugify } from "../data/categories";
 import type { StoryMedia } from "../data/media";
 import type { Badge, Placement, Story } from "../data/news";
 import { allStories } from "../data/news";
-import {
-  deleteVideo,
-  isStoredVideo,
-  storedVideoKey,
-} from "../lib/videoStorage";
+import { backend, backendConfigured, getSession } from "../lib/backend";
+import { useAuth } from "./AuthContext";
 
-const LS_CUSTOM = "gtn.custom-stories-v1";
-const LS_DELETED = "gtn.deleted-stories-v1";
-
-export type NewStoryInput = {
-  title: string;
-  excerpt?: string;
-  category: string;
-  author?: string;
-  badge?: Badge;
-  media?: StoryMedia;
-  placement?: Placement;
-};
-
-type NewsContextValue = {
-  stories: Story[];
-  newsStories: Story[];
-  customStories: Story[];
-  deletedIds: string[];
-  addStory: (input: NewStoryInput) => Story;
-  deleteStory: (id: string) => void;
-  getStory: (id: string) => Story | undefined;
-  categoryStories: (slug: string) => Story[];
-};
-
+export type NewStoryInput = { title: string; excerpt?: string; category: string; author?: string; badge?: Badge; media?: StoryMedia; placement?: Placement };
+type DbStory = Story & { reporter_id?: string; created_at?: string };
+type NewsContextValue = { stories: Story[]; newsStories: Story[]; customStories: Story[]; deletedIds: string[]; loading: boolean; addStory: (input: NewStoryInput) => Promise<Story>; updateStory: (id: string, input: NewStoryInput) => Promise<void>; deleteStory: (id: string) => Promise<void>; getStory: (id: string) => Story | undefined; categoryStories: (slug: string) => Story[]; };
 const NewsContext = createContext<NewsContextValue | null>(null);
 
-function readList(key: string): string[] {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as string[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function readStories(key: string): Story[] {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as Story[]) : [];
-  } catch {
-    return [];
-  }
-}
-
 export function NewsProvider({ children }: { children: ReactNode }) {
-  const [customStories, setCustomStories] = useState<Story[]>(() =>
-    readStories(LS_CUSTOM),
-  );
-  const [deletedIds, setDeletedIds] = useState<string[]>(() =>
-    readList(LS_DELETED),
-  );
-
+  const { user } = useAuth();
+  const [customStories, setCustomStories] = useState<Story[]>([]);
+  const [deletedIds] = useState<string[]>([]);
+  const [loading, setLoading] = useState(backendConfigured);
   useEffect(() => {
-    try {
-      localStorage.setItem(LS_CUSTOM, JSON.stringify(customStories));
-    } catch {
-      // Ignore storage quota errors so the session keeps working.
-    }
-  }, [customStories]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(LS_DELETED, JSON.stringify(deletedIds));
-    } catch {
-      // Ignore storage quota errors.
-    }
-  }, [deletedIds]);
-
-  const stories = useMemo(() => {
-    const remaining = allStories.filter(
-      (story) => !deletedIds.includes(story.id),
-    );
-    return [...remaining, ...customStories];
-  }, [deletedIds, customStories]);
-
-  const newsStories = useMemo(
-    () => stories.filter((story) => story.placement !== "for-you"),
-    [stories],
-  );
-
-  function addStory(input: NewStoryInput): Story {
-    const story: Story = {
-      id: `user-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
-      title: input.title.trim(),
-      excerpt: input.excerpt?.trim() || undefined,
-      category: input.category,
-      time: "Just now",
-      seed: Math.floor(Math.random() * 50) + 1,
-      badge: input.badge,
-      author: input.author?.trim() || "GTN Newsroom",
-      media: input.media,
-      placement: input.placement,
-    };
-    setCustomStories((prev) => [story, ...prev]);
-    return story;
+    if (!backendConfigured) return;
+    let active = true;
+    backend.rows<DbStory>("stories", "select=*&status=eq.published&order=created_at.desc").then((rows) => {
+      if (active) setCustomStories(rows.map((story) => ({ ...story, time: story.created_at ? new Date(story.created_at).toLocaleDateString() : story.time })));
+    }).catch((error) => console.error("Unable to load stories from Supabase", error)).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [user]);
+  const stories = useMemo(() => [...allStories.filter((story) => !deletedIds.includes(story.id)), ...customStories], [customStories, deletedIds]);
+  const newsStories = useMemo(() => stories.filter((story) => story.placement !== "for-you"), [stories]);
+  async function addStory(input: NewStoryInput) {
+    const draft: Story = { id: crypto.randomUUID(), title: input.title.trim(), excerpt: input.excerpt?.trim() || undefined, category: input.category, time: "Just now", seed: Math.floor(Math.random() * 50) + 1, badge: input.badge, author: input.author?.trim() || user?.display_name || "GTN Newsroom", media: input.media, placement: input.placement };
+    if (!backendConfigured) throw new Error("Connect Supabase before publishing stories.");
+    const rows = await backend.insert<DbStory>("stories", { id: draft.id, title: draft.title, excerpt: draft.excerpt, category: draft.category, author: draft.author, badge: draft.badge, media: draft.media, placement: draft.placement, seed: draft.seed, reporter_id: getSession()?.user.id, status: "published" });
+    const saved = rows[0] || draft; setCustomStories((prev) => [saved, ...prev]); return saved;
   }
-
-  function deleteStory(id: string) {
-    const story = customStories.find((item) => item.id === id);
-    if (story?.media?.type === "video" && isStoredVideo(story.media.url)) {
-      deleteVideo(storedVideoKey(story.media.url)).catch(() => {});
-    }
-    setCustomStories((prev) => prev.filter((story) => story.id !== id));
-    setDeletedIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+  async function deleteStory(id: string) {
+    if (customStories.some((story) => story.id === id)) { await backend.remove("stories", `id=eq.${encodeURIComponent(id)}`); setCustomStories((prev) => prev.filter((story) => story.id !== id)); }
   }
-
-  function getStory(id: string) {
-    return stories.find((story) => story.id === id);
+  async function updateStory(id: string, input: NewStoryInput) {
+    await backend.update("stories", `id=eq.${encodeURIComponent(id)}`, { title: input.title.trim(), excerpt: input.excerpt?.trim() || null, category: input.category, author: input.author?.trim() || user?.display_name || "GTN Newsroom", badge: input.badge || null, media: input.media || null, placement: input.placement || null });
+    setCustomStories((prev) => prev.map((story) => story.id === id ? { ...story, ...input, title: input.title.trim(), author: input.author?.trim() || user?.display_name || "GTN Newsroom", time: "Just updated" } : story));
   }
-
-  function categoryStories(slug: string) {
-    return stories.filter(
-      (story) =>
-        slugify(story.category) === slug && story.placement !== "for-you",
-    );
-  }
-
-  const value: NewsContextValue = {
-    stories,
-    newsStories,
-    customStories,
-    deletedIds,
-    addStory,
-    deleteStory,
-    getStory,
-    categoryStories,
-  };
-
-  return <NewsContext.Provider value={value}>{children}</NewsContext.Provider>;
+  function getStory(id: string) { return stories.find((story) => story.id === id); }
+  function categoryStories(slug: string) { return stories.filter((story) => slugify(story.category) === slug && story.placement !== "for-you"); }
+  return <NewsContext.Provider value={{ stories, newsStories, customStories, deletedIds, loading, addStory, updateStory, deleteStory, getStory, categoryStories }}>{children}</NewsContext.Provider>;
 }
-
-export function useNews() {
-  const context = useContext(NewsContext);
-  if (!context) throw new Error("useNews must be used within a NewsProvider");
-  return context;
-}
+export function useNews() { const context = useContext(NewsContext); if (!context) throw new Error("useNews must be used within a NewsProvider"); return context; }

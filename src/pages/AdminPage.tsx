@@ -6,7 +6,7 @@ import { CATEGORIES, slugify, slugToLabel } from "../data/categories";
 import { mediaError, VIDEO_ACCEPT, VIDEO_MAX_MB } from "../data/media";
 import type { StoryMedia } from "../data/media";
 import type { Badge, Placement } from "../data/news";
-import { storeVideo, videoKeyToUrl } from "../lib/videoStorage";
+import { backend } from "../lib/backend";
 import { useAds } from "../store/AdsContext";
 import type { AdMedia } from "../store/AdsContext";
 import { useAuth } from "../store/AuthContext";
@@ -18,8 +18,8 @@ type MediaKind = "none" | "image" | "video" | "youtube" | "tiktok";
 type AdKind = "text" | "image" | "video";
 
 export default function AdminPage() {
-  const { user, signOut } = useAuth();
-  const { stories, customStories, deletedIds, addStory, deleteStory } =
+  const { user, signOut, inviteReporter, loading, invitationPending } = useAuth();
+  const { stories, customStories, addStory, updateStory, deleteStory } =
     useNews();
   const { ads, addAd, deleteAd } = useAds();
 
@@ -36,6 +36,9 @@ export default function AdminPage() {
   const [placement, setPlacement] = useState<Placement | "">("");
   const [flash, setFlash] = useState("");
   const [query, setQuery] = useState("");
+  const [reporterEmail, setReporterEmail] = useState("");
+  const [reporterName, setReporterName] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const [adHeadline, setAdHeadline] = useState("");
   const [adUrl, setAdUrl] = useState("");
@@ -46,20 +49,24 @@ export default function AdminPage() {
   const [adVideoName, setAdVideoName] = useState("");
   const [adMediaNote, setAdMediaNote] = useState("");
 
-  if (!user) {
+  if (loading) return <main className="container main"><p className="empty">Loading staff workspace…</p></main>;
+  if (!user || invitationPending) {
     return (
       <main className="container main">
         <div className="cat-head">
-          <h1>News Manager</h1>
-          <span>Sign in to add, publish and remove stories</span>
+          <h1>Editorial Desk</h1>
+          <span>Sign in with your GTN staff account</span>
         </div>
         <AuthPanel />
       </main>
     );
   }
+  const isSuperAdmin = user.role === "super_admin";
 
   const term = query.trim().toLowerCase();
-  const visible = stories.filter(
+  const myStories = customStories.filter((story) => (story as typeof story & { reporter_id?: string }).reporter_id === user.id);
+  const managedStories = isSuperAdmin ? stories : myStories;
+  const visible = managedStories.filter(
     (story) =>
       !term ||
       story.title.toLowerCase().includes(term) ||
@@ -70,19 +77,15 @@ export default function AdminPage() {
   const urlError =
     isUrlKind && mediaUrl.trim() ? mediaError(mediaUrl, mediaKind) : null;
 
-  function onFileChange(event: ChangeEvent<HTMLInputElement>) {
+  async function onFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith("image/")) {
       setMediaNote("Please choose an image file (JPG, PNG, GIF or WebP).");
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      setImageData(reader.result as string);
-      setMediaNote("");
-    };
-    reader.readAsDataURL(file);
+    try { setImageData(await backend.upload(file)); setMediaNote(""); }
+    catch (cause) { setMediaNote(cause instanceof Error ? cause.message : "Could not upload image."); }
   }
 
   async function onVideoChange(event: ChangeEvent<HTMLInputElement>) {
@@ -99,8 +102,7 @@ export default function AdminPage() {
       return;
     }
     try {
-      const key = await storeVideo(file);
-      setMediaUrl(videoKeyToUrl(key));
+      setMediaUrl(await backend.upload(file));
       setVideoName(file.name);
       setMediaNote("");
     } catch {
@@ -111,6 +113,7 @@ export default function AdminPage() {
   }
 
   function resetForm() {
+    setEditingId(null);
     setTitle("");
     setExcerpt("");
     setAuthor("");
@@ -149,7 +152,7 @@ export default function AdminPage() {
     return null;
   }
 
-  function onSubmit(event: FormEvent) {
+  async function onSubmit(event: FormEvent) {
     event.preventDefault();
     if (!title.trim()) {
       setFlash("Please enter a news title.");
@@ -158,7 +161,8 @@ export default function AdminPage() {
     const media = buildMedia();
     if (!media && mediaKind !== "none") return;
 
-    addStory({
+    try {
+      const input = {
       title,
       excerpt,
       category,
@@ -166,29 +170,38 @@ export default function AdminPage() {
       badge: badge || undefined,
       media: media ?? undefined,
       placement: placement || undefined,
-    });
-    setFlash(`Published to ${category}. It now appears across the site.`);
+      };
+      if (editingId) await updateStory(editingId, input); else await addStory(input);
+    } catch (cause) { setFlash(cause instanceof Error ? cause.message : "Could not publish story."); return; }
+    setFlash(editingId ? "Story updated." : `Published to ${category}. It now appears across the site.`);
+    setEditingId(null);
     resetForm();
   }
 
   function onDelete(id: string) {
-    deleteStory(id);
-    setFlash("Story removed from the site.");
+    void deleteStory(id).then(() => setFlash("Story removed from the site.")).catch((cause) => setFlash(cause instanceof Error ? cause.message : "Could not remove story."));
   }
 
-  function onAdImageChange(event: ChangeEvent<HTMLInputElement>) {
+  function editStory(story: (typeof stories)[number]) {
+    setEditingId(story.id); setTitle(story.title); setExcerpt(story.excerpt || ""); setCategory(story.category); setAuthor(story.author || ""); setBadge(story.badge || ""); setMediaKind(story.media?.type || "none"); setMediaUrl(story.media?.url || ""); setImageData(story.media?.type === "image" ? story.media.url : ""); setPlacement(story.placement || "");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function onInviteReporter(event: FormEvent) {
+    event.preventDefault();
+    try { await inviteReporter(reporterEmail, reporterName); setFlash(`Secure invitation sent to ${reporterEmail}.`); setReporterEmail(""); setReporterName(""); }
+    catch (cause) { setFlash(cause instanceof Error ? cause.message : "Could not invite reporter."); }
+  }
+
+  async function onAdImageChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith("image/")) {
       setAdMediaNote("Please choose an image file (JPG, PNG, GIF or WebP).");
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      setAdImageData(reader.result as string);
-      setAdMediaNote("");
-    };
-    reader.readAsDataURL(file);
+    try { setAdImageData(await backend.upload(file, "ad-media")); setAdMediaNote(""); }
+    catch (cause) { setAdMediaNote(cause instanceof Error ? cause.message : "Could not upload image."); }
   }
 
   async function onAdVideoChange(event: ChangeEvent<HTMLInputElement>) {
@@ -205,8 +218,7 @@ export default function AdminPage() {
       return;
     }
     try {
-      const key = await storeVideo(file);
-      setAdVideoUrl(videoKeyToUrl(key));
+      setAdVideoUrl(await backend.upload(file, "ad-media"));
       setAdVideoName(file.name);
       setAdMediaNote("");
     } catch {
@@ -216,7 +228,7 @@ export default function AdminPage() {
     }
   }
 
-  function onSubmitAd(event: FormEvent) {
+  async function onSubmitAd(event: FormEvent) {
     event.preventDefault();
     if (!adHeadline.trim()) {
       setFlash("Please enter an ad headline.");
@@ -236,7 +248,8 @@ export default function AdminPage() {
       }
       media = { type: "video", url: adVideoUrl };
     }
-    addAd({ headline: adHeadline, url: adUrl, media, target: adTarget });
+    try { await addAd({ headline: adHeadline, url: adUrl, media, target: adTarget }); }
+    catch (cause) { setFlash(cause instanceof Error ? cause.message : "Could not publish ad."); return; }
     setFlash(
       adTarget
         ? `Ad published for ${adTargetLabel(adTarget)}.`
@@ -262,8 +275,8 @@ export default function AdminPage() {
     <main className="container main">
       <div className="cat-head cat-head--split">
         <div>
-          <h1>News Manager</h1>
-          <span>Signed in as {user}. Add, publish and remove stories</span>
+          <h1>Editorial Desk</h1>
+          <span>Signed in as {user.display_name} · {isSuperAdmin ? "Super admin" : "Reporter"}</span>
         </div>
         <button className="auth__signout" type="button" onClick={signOut}>
           Sign Out
@@ -295,24 +308,19 @@ export default function AdminPage() {
           <span>Total stories</span>
         </div>
         <div className="stats__item">
-          <b>{customStories.length}</b>
+          <b>{isSuperAdmin ? customStories.length : myStories.length}</b>
           <span>Published by you</span>
         </div>
-        <div className="stats__item">
-          <b>{deletedIds.length}</b>
-          <span>Hidden from site</span>
-        </div>
-        <div className="stats__item">
-          <b>{ads.length}</b>
-          <span>Live ads</span>
-        </div>
+        {isSuperAdmin && <div className="stats__item"><b>{ads.length}</b><span>Live ads</span></div>}
       </div>
 
       {flash && <p className="flash">{flash}</p>}
 
+      {isSuperAdmin && <section className="admin__panel admin__panel--full" aria-label="Reporter accounts"><h2>Reporter access</h2><p className="form__hint">Create a staff account. The reporter receives a secure email invitation to set their own password.</p><form className="form" onSubmit={onInviteReporter}><div className="admin__row"><label><span>Reporter name</span><input value={reporterName} onChange={(e) => setReporterName(e.target.value)} required /></label><label><span>Work email</span><input type="email" value={reporterEmail} onChange={(e) => setReporterEmail(e.target.value)} required /></label></div><button className="btn" type="submit">Invite reporter</button></form></section>}
+
       <div className="admin">
         <section className="admin__panel" aria-label="Add story">
-          <h2>Add a story</h2>
+          <h2>{editingId ? "Edit story" : isSuperAdmin ? "Publish a story" : "Submit a story"}</h2>
           <form className="form" onSubmit={onSubmit}>
             <label>
               <span>Title</span>
@@ -491,14 +499,12 @@ export default function AdminPage() {
               )}
             </fieldset>
 
-            <button className="btn" type="submit">
-              Publish story
-            </button>
+            <div className="admin__form-actions"><button className="btn" type="submit">{editingId ? "Save changes" : "Publish story"}</button>{editingId && <button className="admin__edit" type="button" onClick={resetForm}>Cancel edit</button>}</div>
           </form>
         </section>
 
         <section className="admin__panel" aria-label="Manage stories">
-          <h2>All stories</h2>
+          <h2>{isSuperAdmin ? "Editorial management" : "Your stories"}</h2>
           <label className="form__search">
             <span>Filter</span>
             <input
@@ -509,11 +515,13 @@ export default function AdminPage() {
             />
           </label>
           <p className="admin__count">
-            Showing {visible.length} of {stories.length} stories
+            Showing {visible.length} of {managedStories.length} stories
           </p>
           <ul className="admin__list">
-            {visible.map((story) => (
-              <li className="admin__item" key={story.id}>
+            {visible.map((story) => {
+              const storedStory = customStories.find((item) => item.id === story.id) as (typeof story & { reporter_id?: string }) | undefined;
+              const canManage = Boolean(storedStory && (isSuperAdmin || storedStory.reporter_id === user.id));
+              return <li className="admin__item" key={story.id}>
                 <div>
                   <Link className="admin__item-title" to={`/story/${story.id}`}>
                     {story.title}
@@ -535,35 +543,23 @@ export default function AdminPage() {
                     {story.placement === "news" && (
                       <em className="admin__mine"> · News</em>
                     )}
-                    {customStories.some((item) => item.id === story.id) && (
+                    {storedStory?.reporter_id === user.id && (
                       <em className="admin__mine"> yours</em>
                     )}
                   </span>
                 </div>
-                <button
-                  className="admin__delete"
-                  type="button"
-                  onClick={() => onDelete(story.id)}
-                  aria-label={`Delete ${story.title}`}
-                >
-                  Delete
-                </button>
+                {canManage && <div className="admin__actions"><button className="admin__edit" type="button" onClick={() => editStory(story)}>Edit</button><button className="admin__delete" type="button" onClick={() => onDelete(story.id)} aria-label={`Delete ${story.title}`}>Delete</button></div>}
               </li>
-            ))}
+            })}
           </ul>
-          {deletedIds.length > 0 && (
-            <p className="admin__note">
-              Deleted stories stay removed on this device only.
-            </p>
-          )}
         </section>
       </div>
 
-      <section
+      {isSuperAdmin && <section
         className="admin__panel admin__panel--full"
         aria-label="Manage ads"
       >
-        <h2>Manage Ads</h2>
+        <h2>Advertising</h2>
         <form className="form" onSubmit={onSubmitAd}>
           <div className="admin__row">
             <label>
@@ -716,7 +712,7 @@ export default function AdminPage() {
             site's ad slots.
           </p>
         )}
-      </section>
+      </section>}
     </main>
   );
 }

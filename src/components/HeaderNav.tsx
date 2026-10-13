@@ -67,7 +67,7 @@ export default function HeaderNav({ query, onQueryChange }: Props) {
     if (term) navigate(`/news?q=${encodeURIComponent(term)}`);
   }
 
-  const accountLabel = user ? `Hi, ${user}` : "Sign In";
+  const accountLabel = user ? `Hi, ${user.display_name}` : "Staff Sign In";
   const accountLinkClass =
     "hidden cursor-pointer rounded-full border border-white/85 px-4 py-1 text-xs font-semibold text-white transition hover:bg-white hover:text-[#f68220] sm:inline-block";
 

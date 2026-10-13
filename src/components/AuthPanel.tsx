@@ -1,118 +1,15 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { useAuth } from "../store/AuthContext";
-
-type Mode = "signin" | "register";
-
 export default function AuthPanel() {
-  const { signIn, signUp } = useAuth();
-  const [mode, setMode] = useState<Mode>("signin");
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirm, setConfirm] = useState("");
-  const [error, setError] = useState("");
-
-  function switchMode(next: Mode) {
-    setMode(next);
-    setError("");
-  }
-
-  function onSubmit(event: FormEvent) {
-    event.preventDefault();
-    setError("");
-
-    if (mode === "register" && password !== confirm) {
-      setError("Passwords do not match.");
-      return;
-    }
-
-    const result =
-      mode === "signin"
-        ? signIn(username, password)
-        : signUp(username, password);
-    if (!result.ok) setError(result.error);
-  }
-
-  const tabClass = (active: Mode) =>
-    `auth__tab${mode === active ? " auth__tab--active" : ""}`;
-
-  return (
-    <section className="auth" aria-label="Sign in or register">
-      <div className="auth__tabs" role="tablist">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={mode === "signin"}
-          className={tabClass("signin")}
-          onClick={() => switchMode("signin")}
-        >
-          Sign In
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={mode === "register"}
-          className={tabClass("register")}
-          onClick={() => switchMode("register")}
-        >
-          Register
-        </button>
-      </div>
-
-      <form className="form" onSubmit={onSubmit}>
-        <label>
-          <span>Username</span>
-          <input
-            type="text"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder="Your username"
-            autoComplete="username"
-            required
-          />
-        </label>
-        <label>
-          <span>Password</span>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder={
-              mode === "register" ? "At least 4 characters" : "Your password"
-            }
-            autoComplete={
-              mode === "register" ? "new-password" : "current-password"
-            }
-            required
-          />
-        </label>
-        {mode === "register" && (
-          <label>
-            <span>Confirm password</span>
-            <input
-              type="password"
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-              placeholder="Repeat your password"
-              autoComplete="new-password"
-              required
-            />
-          </label>
-        )}
-
-        {error && <p className="flash">{error}</p>}
-
-        <button className="btn" type="submit">
-          {mode === "signin" ? "Sign In" : "Create Account"}
-        </button>
-
-        <p className="auth__note">
-          {mode === "signin"
-            ? "New here? Switch to Register to create an account."
-            : "Already registered? Switch to Sign In."}
-          Accounts and sessions are stored locally in your browser.
-        </p>
-      </form>
-    </section>
-  );
+  const { signIn, error, configured, invitationPending, completeInvitation } = useAuth();
+  const [email, setEmail] = useState(""); const [password, setPassword] = useState(""); const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  async function submit(event: FormEvent) { event.preventDefault(); setBusy(true); setMessage(""); try { if (invitationPending) { await completeInvitation(password); setMessage("Password saved. You can sign in with your work email and new password."); } else await signIn(email, password); } catch (cause) { setMessage(cause instanceof Error ? cause.message : "Authentication failed."); } finally { setBusy(false); } }
+  return <section className="auth" aria-label="Staff sign in"><h2>{invitationPending ? "Set your reporter password" : "Staff sign in"}</h2>
+    {!configured && <p className="flash">Supabase is not connected yet. Add the project URL and anon key to the deployment environment.</p>}
+    <form className="form" onSubmit={submit}>{!invitationPending && <label><span>Work email</span><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" required /></label>}<label><span>{invitationPending ? "New password (12+ characters)" : "Password"}</span><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={invitationPending ? "new-password" : "current-password"} minLength={invitationPending ? 12 : undefined} required /></label>
+      {(error || message) && <p className="flash">{message || error}</p>}<button className="btn" type="submit" disabled={busy || !configured}>{busy ? "Please wait…" : invitationPending ? "Set password" : "Sign in"}</button>
+      {!invitationPending && <p className="auth__note">Reporter accounts are created by a super admin. Invitations include a secure link for setting your password.</p>}</form>
+  </section>;
 }
