@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import { Link, Navigate, NavLink, useLocation, useNavigate } from "react-router-dom";
 import AuthPanel from "../components/AuthPanel";
 import { slugify, slugToLabel } from "../data/categories";
-import { mediaError, VIDEO_ACCEPT, VIDEO_MAX_MB } from "../data/media";
+import { mediaError, storyMediaItems, VIDEO_ACCEPT, VIDEO_MAX_MB } from "../data/media";
 import type { StoryMedia } from "../data/media";
 import type { Badge, Placement } from "../data/news";
 import { backend } from "../lib/backend";
@@ -17,7 +17,7 @@ import { PERMISSION_LABELS, type PermissionKey, type ReporterPermissions, usePer
 
 const BADGES: (Badge | "")[] = ["", "live", "video", "analysis", "exclusive"];
 
-type MediaKind = "none" | "image" | "video" | "youtube" | "tiktok";
+type MediaKind = "none" | "youtube" | "tiktok";
 type AdKind = "text" | "image" | "video";
 type SiteCategory = { id: string; name: string; slug: string; sort_order: number };
 
@@ -30,19 +30,26 @@ export default function AdminPage() {
     useNews();
   const { categories: newsCategories, refreshCategories } = useCategories();
   const { permissions, loading: permissionsLoading, can, save: savePermissions } = usePermissions();
-  const { ads, addAd, deleteAd } = useAds();
+  const { ads, addAd, deleteAd, refreshAds } = useAds();
 
   const [title, setTitle] = useState("");
   const [excerpt, setExcerpt] = useState("");
+  const [body, setBody] = useState("");
   const [category, setCategory] = useState("News");
   const [author, setAuthor] = useState("");
   const [badge, setBadge] = useState<Badge | "">("");
   const [mediaKind, setMediaKind] = useState<MediaKind>("none");
   const [mediaUrl, setMediaUrl] = useState("");
-  const [imageData, setImageData] = useState("");
-  const [videoName, setVideoName] = useState("");
+  const [mediaAssets, setMediaAssets] = useState<StoryMedia[]>([]);
+  const [mediaUploading, setMediaUploading] = useState(false);
   const [mediaNote, setMediaNote] = useState("");
+  const [recording, setRecording] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordingStreamRef = useRef<MediaStream | null>(null);
+  const recordingChunksRef = useRef<BlobPart[]>([]);
   const [placement, setPlacement] = useState<Placement | "">("");
+  const [isTrending, setIsTrending] = useState(false);
+  const [isBreaking, setIsBreaking] = useState(false);
   const [flash, setFlash] = useState("");
   const [query, setQuery] = useState("");
   const [appliedQuery, setAppliedQuery] = useState("");
@@ -66,11 +73,21 @@ export default function AdminPage() {
   const [adVideoUrl, setAdVideoUrl] = useState("");
   const [adVideoName, setAdVideoName] = useState("");
   const [adMediaNote, setAdMediaNote] = useState("");
+  const [deletingAdId, setDeletingAdId] = useState<string | null>(null);
+  const [profilePassword, setProfilePassword] = useState("");
+  const [profilePasswordConfirm, setProfilePasswordConfirm] = useState("");
+  const [profileBusy, setProfileBusy] = useState(false);
+  const [profileShowPassword, setProfileShowPassword] = useState(false);
+  const [resetBusy, setResetBusy] = useState(false);
 
 
   useEffect(() => {
     if (newsCategories.length && !newsCategories.includes(category)) setCategory(newsCategories[0]);
   }, [newsCategories, category]);
+  useEffect(() => () => {
+    if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop();
+    recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+  }, []);
   useEffect(() => {
     if (!window.matchMedia("(max-width: 600px)").matches) return;
     const nav = document.querySelector<HTMLElement>(".owner-sidebar__nav");
@@ -114,7 +131,7 @@ export default function AdminPage() {
   const isSuperAdmin = user.role === "super_admin";
   if (!isSuperAdmin && permissionsLoading) return <main className="container main"><p className="empty">Loading reporter permissions…</p></main>;
   if (activePage === "stories") return <Navigate to="/admin/add-story" replace />;
-  if (isSuperAdmin && !["dashboard", "add-story", "my-stories", "staff", "roles", "categories", "advertising"].includes(activePage)) {
+  if (isSuperAdmin && !["dashboard", "add-story", "my-stories", "staff", "roles", "categories", "advertising", "profile"].includes(activePage)) {
     return <Navigate to="/admin/dashboard" replace />;
   }
   const reporterPages = [
@@ -124,6 +141,7 @@ export default function AdminPage() {
     ...(can("manage_categories") ? ["categories"] : []),
     ...(can("manage_staff") ? ["staff"] : []),
     ...(can("manage_ads") ? ["advertising"] : []),
+    "profile",
   ];
   if (!isSuperAdmin && !reporterPages.includes(activePage)) {
     return <main className="container main"><p className="empty">This workspace feature is unavailable for your account. Contact the Super Admin if you need access.</p></main>;
@@ -140,82 +158,105 @@ export default function AdminPage() {
   );
 
   const isUrlKind = mediaKind === "youtube" || mediaKind === "tiktok";
-  const urlError =
-    isUrlKind && mediaUrl.trim() ? mediaError(mediaUrl, mediaKind) : null;
+  const urlError = isUrlKind && mediaUrl.trim() ? mediaError(mediaUrl, mediaKind) : null;
 
-  async function onFileChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      setMediaNote("Please choose an image file (JPG, PNG, GIF or WebP).");
+  async function uploadMediaFiles(files: File[]) {
+    if (!files.length) return;
+    setMediaUploading(true);
+    setMediaNote("");
+    const checkedFiles = files.map((file) => ({
+      file,
+      mediaType: (file.type.startsWith("image/") ? "image" : file.type.startsWith("video/") ? "video" : file.type.startsWith("audio/") ? "audio" : null) as StoryMedia["type"] | null,
+    }));
+    const invalidFile = checkedFiles.find(({ file, mediaType }) => !mediaType || file.size > VIDEO_MAX_MB * 1024 * 1024);
+    if (invalidFile) {
+      setMediaNote(!invalidFile.mediaType ? `Unsupported media file: ${invalidFile.file.name}` : `${invalidFile.file.name} is over the ${VIDEO_MAX_MB} MB upload limit.`);
+      setMediaUploading(false);
       return;
     }
-    try { setImageData(await backend.upload(file)); setMediaNote(""); }
-    catch (cause) { setMediaNote(cause instanceof Error ? cause.message : "Could not upload image."); }
+    let uploadedCount = 0;
+    try {
+      for (const { file, mediaType } of checkedFiles) {
+        if (!mediaType) continue;
+        const item: StoryMedia = { type: mediaType, url: await backend.upload(file), name: file.name };
+        setMediaAssets((current) => [...current, item]);
+        uploadedCount += 1;
+      }
+      setMediaNote(`${uploadedCount} media file${uploadedCount === 1 ? "" : "s"} ready.`);
+    } catch (cause) {
+      setMediaNote(cause instanceof Error ? cause.message : "Could not upload these media files.");
+    } finally { setMediaUploading(false); }
   }
 
-  async function onVideoChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    if (!file.type || !file.type.startsWith("video/")) {
-      setMediaNote("Please choose a video file (MP4, WebM, OGG or MOV).");
-      return;
-    }
-    if (file.size > VIDEO_MAX_MB * 1024 * 1024) {
-      setMediaNote(
-        `That video is too large. Keep it under ${VIDEO_MAX_MB} MB.`,
-      );
+  function onMediaFilesChange(event: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files || []);
+    event.currentTarget.value = "";
+    void uploadMediaFiles(files);
+  }
+
+  async function startAudioRecording() {
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      setMediaNote("Audio recording is not supported in this browser.");
       return;
     }
     try {
-      setMediaUrl(await backend.upload(file));
-      setVideoName(file.name);
-      setMediaNote("");
-    } catch {
-      setMediaNote(
-        "Could not store that video in this browser. Try a smaller file.",
-      );
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      recordingStreamRef.current = stream;
+      recordingChunksRef.current = [];
+      const preferred = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg"].find((mime) => MediaRecorder.isTypeSupported(mime));
+      const recorder = new MediaRecorder(stream, preferred ? { mimeType: preferred } : undefined);
+      mediaRecorderRef.current = recorder;
+      recorder.ondataavailable = (event) => { if (event.data.size) recordingChunksRef.current.push(event.data); };
+      recorder.onerror = () => setMediaNote("Recording failed. Check microphone access and try again.");
+      recorder.onstop = () => {
+        const mime = recorder.mimeType || "audio/webm";
+        const extension = mime.includes("ogg") ? "ogg" : mime.includes("mp4") ? "m4a" : "webm";
+        const clip = new File([new Blob(recordingChunksRef.current, { type: mime })], `gtn-recording-${Date.now()}.${extension}`, { type: mime });
+        stream.getTracks().forEach((track) => track.stop());
+        recordingStreamRef.current = null;
+        mediaRecorderRef.current = null;
+        setRecording(false);
+        if (clip.size) void uploadMediaFiles([clip]);
+        else setMediaNote("No audio was captured. Record again and try once more.");
+      };
+      recorder.start();
+      setRecording(true);
+      setMediaNote("Recording audio…");
+    } catch (cause) {
+      recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+      recordingStreamRef.current = null;
+      setMediaNote(cause instanceof Error ? cause.message : "Could not access the microphone.");
     }
+  }
+
+  function stopAudioRecording() {
+    if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop();
   }
 
   function resetForm() {
     setEditingId(null);
     setTitle("");
     setExcerpt("");
+    setBody("");
     setAuthor("");
     setBadge("");
     setMediaKind("none");
     setMediaUrl("");
-    setImageData("");
-    setVideoName("");
+    setMediaAssets([]);
     setMediaNote("");
+    setIsTrending(false);
+    setIsBreaking(false);
     setPlacement("");
   }
 
-  function buildMedia(): StoryMedia | null {
-    if (mediaKind === "image") {
-      if (!imageData) {
-        setFlash("Choose a picture to attach, or set Media to None.");
-        return null;
-      }
-      return { type: "image", url: imageData };
-    }
-    if (mediaKind === "video") {
-      if (!mediaUrl) {
-        setFlash("Upload a video file to attach, or set Media to None.");
-        return null;
-      }
-      return { type: "video", url: mediaUrl };
-    }
-    if (isUrlKind) {
+  function buildMedia(): StoryMedia[] | null {
+    const media = [...mediaAssets];
+    if (isUrlKind && mediaUrl.trim()) {
       const error = mediaError(mediaUrl, mediaKind);
-      if (error) {
-        setFlash(error);
-        return null;
-      }
-      return { type: mediaKind, url: mediaUrl.trim() };
+      if (error) { setFlash(error); return null; }
+      media.push({ type: mediaKind, url: mediaUrl.trim() });
     }
-    return null;
+    return media;
   }
 
   async function onSubmit(event: FormEvent) {
@@ -224,18 +265,23 @@ export default function AdminPage() {
       setFlash("Please enter a news title.");
       return;
     }
+    if (mediaUploading) { setFlash("Wait for media uploads to finish before publishing."); return; }
+    if (recording) { setFlash("Stop the audio recording before publishing."); return; }
     const media = buildMedia();
-    if (!media && mediaKind !== "none") return;
+    if (!media) return;
 
     try {
       const input = {
       title,
       excerpt,
+      body,
       category,
       author,
       badge: badge || undefined,
-      media: media ?? undefined,
+      media: media.length ? media : undefined,
       placement: placement || undefined,
+      is_trending: isTrending,
+      is_breaking: isBreaking,
       };
       if (editingId) await updateStory(editingId, input); else await addStory(input);
     } catch (cause) { setFlash(cause instanceof Error ? cause.message : "Could not publish story."); return; }
@@ -249,7 +295,7 @@ export default function AdminPage() {
   }
 
   function editStory(story: (typeof stories)[number]) {
-    setEditingId(story.id); setTitle(story.title); setExcerpt(story.excerpt || ""); setCategory(story.category); setAuthor(story.author || ""); setBadge(story.badge || ""); setMediaKind(story.media?.type || "none"); setMediaUrl(story.media?.url || ""); setImageData(story.media?.type === "image" ? story.media.url : ""); setPlacement(story.placement || "");
+    setEditingId(story.id); setTitle(story.title); setExcerpt(story.excerpt || ""); setBody(story.body || ""); setCategory(story.category); setAuthor(story.author || ""); setBadge(story.badge || ""); setMediaKind("none"); setMediaUrl(""); setMediaAssets(storyMediaItems(story.media)); setIsTrending(Boolean(story.is_trending)); setIsBreaking(Boolean(story.is_breaking)); setPlacement(story.placement || "");
     navigate("/admin/add-story");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -367,6 +413,15 @@ export default function AdminPage() {
       return;
     }
     let media: AdMedia | undefined;
+    if (adUrl.trim()) {
+      try {
+        const destination = new URL(adUrl.trim());
+        if (destination.protocol !== "http:" && destination.protocol !== "https:") throw new Error("Use an http or https destination.");
+      } catch {
+        setFlash("Enter a valid destination URL beginning with https:// or http://.");
+        return;
+      }
+    }
     if (adKind === "image") {
       if (!adImageData) {
         setFlash("Choose a photo for the ad, or switch the type to Text.");
@@ -397,6 +452,77 @@ export default function AdminPage() {
     setAdMediaNote("");
   }
 
+  async function onDeleteAd(id: string, headline: string) {
+    if (!window.confirm(`Delete “${headline}”? This cannot be undone.`)) return;
+    setDeletingAdId(id);
+    setFlash("");
+    try {
+      await deleteAd(id);
+      setFlash("Ad deleted.");
+    } catch (cause) {
+      setFlash(cause instanceof Error ? cause.message : "Could not delete ad.");
+    } finally {
+      setDeletingAdId(null);
+    }
+  }
+
+  async function onChangeProfilePassword(event: FormEvent) {
+    event.preventDefault();
+    if (profilePassword.length < 12) { setFlash("Use at least 12 characters for your new password."); return; }
+    if (profilePassword !== profilePasswordConfirm) { setFlash("The password confirmation does not match."); return; }
+    setProfileBusy(true);
+    setFlash("");
+    try {
+      await backend.changePassword(profilePassword);
+      setProfilePassword("");
+      setProfilePasswordConfirm("");
+      setFlash("Your password has been updated.");
+    } catch (cause) {
+      setFlash(cause instanceof Error ? cause.message : "Could not update your password.");
+    } finally { setProfileBusy(false); }
+  }
+
+  async function onDownloadBackup() {
+    setProfileBusy(true);
+    setFlash("");
+    try {
+      const [storiesBackup, adsBackup, categoriesBackup, staffBackup, permissionsBackup] = await Promise.all([
+        backend.rows<unknown>("stories", "select=*&order=created_at.asc"),
+        backend.rows<unknown>("ads", "select=*&order=created_at.asc"),
+        backend.rows<unknown>("site_categories", "select=*&order=sort_order.asc"),
+        backend.rows<unknown>("staff_profiles", "select=id,email,display_name,role,is_active,created_at&order=created_at.asc"),
+        backend.rows<unknown>("reporter_permissions", "select=*&limit=1"),
+      ]);
+      const backup = { format: "gtn-site-backup", version: 1, created_at: new Date().toISOString(), data: { stories: storiesBackup, ads: adsBackup, categories: categoriesBackup, staff: staffBackup, reporter_permissions: permissionsBackup } };
+      const objectUrl = URL.createObjectURL(new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" }));
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = `gtn-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      anchor.click();
+      URL.revokeObjectURL(objectUrl);
+      setFlash("Backup downloaded. Store it somewhere secure.");
+    } catch (cause) {
+      setFlash(cause instanceof Error ? `Backup could not be created: ${cause.message}` : "Backup could not be created.");
+    } finally { setProfileBusy(false); }
+  }
+
+  async function onResetSiteContent() {
+    if (!window.confirm("Reset site content? This will permanently remove all stories, ads, and custom news categories. Staff accounts, role settings, and uploaded media will remain.")) return;
+    setResetBusy(true);
+    setFlash("");
+    try {
+      await backend.removeRows("stories", "id=not.is.null");
+      await backend.removeRows("ads", "id=not.is.null");
+      await backend.removeRows("site_categories", "id=not.is.null");
+      setFlash("Stories, ads, and custom categories have been cleared. Staff accounts, role settings, and uploaded media remain available.");
+      await refreshStories();
+      await refreshCategories();
+      await refreshAds();
+    } catch (cause) {
+      setFlash(cause instanceof Error ? `Content reset did not finish: ${cause.message}` : "Content reset did not finish.");
+    } finally { setResetBusy(false); }
+  }
+
   function adTargetLabel(target: string): string {
     if (target === "home") return "the Home page";
     if (target === "news") return "the News page";
@@ -418,11 +544,12 @@ export default function AdminPage() {
           <NavLink to="/admin/roles" className={({isActive})=>isActive?"owner-sidebar__link owner-sidebar__link--roles owner-sidebar__link--active":"owner-sidebar__link owner-sidebar__link--roles"}><span className="owner-sidebar__icon">♧</span>Roles &amp; Permissions</NavLink>
           <NavLink to="/admin/advertising" className={({isActive})=>isActive?"owner-sidebar__link owner-sidebar__link--active":"owner-sidebar__link"}><span className="owner-sidebar__icon">▣</span>Advertising</NavLink></>}
           {!isSuperAdmin && can("manage_ads") && <NavLink to="/admin/advertising" className={({isActive})=>isActive?"owner-sidebar__link owner-sidebar__link--active":"owner-sidebar__link"}><span className="owner-sidebar__icon">▣</span>Advertising</NavLink>}
+          <NavLink to="/admin/profile" className={({isActive})=>isActive?"owner-sidebar__link owner-sidebar__link--active":"owner-sidebar__link"}><span className="owner-sidebar__icon">♙</span>My Profile</NavLink>
         </nav>
         <div className="owner-sidebar__footer"><span className="owner-sidebar__status" /> {isSuperAdmin ? "Owner access enabled" : "Reporter access enabled"}</div>
       </aside>
       <div className="owner-content">
-      <div className="owner-page-heading"><div><span className="owner-sidebar__eyebrow">{isSuperAdmin ? "CONTROL CENTER" : "EDITORIAL WORKSPACE"}</span><h1>{isSuperAdmin ? ({dashboard:"Dashboard", "add-story":"Add Story", "my-stories":"Manage Stories",staff:"Add Staff",categories:"News Categories",roles:"Roles & Permissions",advertising:"Advertising"} as Record<string,string>)[activePage] || "Dashboard" : ({dashboard:"Reporter Dashboard", "add-story":"Add Story", "my-stories":"My Stories",categories:"News Categories",staff:"Add Staff",advertising:"Advertising"} as Record<string,string>)[activePage] || "Reporter Dashboard"}</h1><p>{isSuperAdmin ? "Manage publishing, staff access, categories, and advertising." : "Publish stories and manage your own reporting."}</p></div><span className="owner-page-heading__badge">{isSuperAdmin ? "OWNER" : "REPORTER"}</span></div>
+      <div className="owner-page-heading"><div><span className="owner-sidebar__eyebrow">{isSuperAdmin ? "CONTROL CENTER" : "EDITORIAL WORKSPACE"}</span><h1>{activePage === "profile" ? "My Profile" : isSuperAdmin ? ({dashboard:"Dashboard", "add-story":"Add Story", "my-stories":"Manage Stories",staff:"Add Staff",categories:"News Categories",roles:"Roles & Permissions",advertising:"Advertising"} as Record<string,string>)[activePage] || "Dashboard" : ({dashboard:"Reporter Dashboard", "add-story":"Add Story", "my-stories":"My Stories",categories:"News Categories",staff:"Add Staff",advertising:"Advertising"} as Record<string,string>)[activePage] || "Reporter Dashboard"}</h1><p>{activePage === "profile" ? "Review your staff account details and update your sign-in credentials." : isSuperAdmin ? "Manage publishing, staff access, categories, and advertising." : "Publish stories and manage your own reporting."}</p></div><span className="owner-page-heading__badge">{isSuperAdmin ? "OWNER" : "REPORTER"}</span></div>
       {(activePage === "dashboard" && (isSuperAdmin || can("dashboard_view"))) && <section id="admin-dashboard" className="owner-section owner-dashboard">
       <header className="owner-dashboard__welcome">
         <div className="owner-dashboard__welcome-copy">
@@ -476,6 +603,33 @@ export default function AdminPage() {
       </section>}
 
       {flash && <p className="flash">{flash}</p>}
+
+      {activePage === "profile" && <>
+        <section className="admin__panel admin__panel--full owner-section owner-profile" aria-label="Staff profile">
+          <div className="owner-section__heading"><span className="owner-section__eyebrow">ACCOUNT</span><h2>Profile details</h2></div>
+          <dl className="owner-profile__details">
+            <div><dt>Name</dt><dd>{user.display_name || "GTN staff"}</dd></div>
+            <div><dt>Work email</dt><dd>{user.email}</dd></div>
+            <div><dt>Access level</dt><dd>{user.role === "super_admin" ? "Super Admin" : "Reporter"}</dd></div>
+            <div><dt>Account status</dt><dd><span className={`owner-status ${user.is_active ? "owner-status--active" : "owner-status--inactive"}`}>{user.is_active ? "Active" : "Inactive"}</span></dd></div>
+            {user.created_at && <div><dt>Member since</dt><dd>{new Date(user.created_at).toLocaleDateString()}</dd></div>}
+          </dl>
+        </section>
+        <section className="admin__panel admin__panel--full owner-section owner-profile" aria-label="Update password">
+          <div className="owner-section__heading"><span className="owner-section__eyebrow">SECURITY</span><h2>Update password</h2></div>
+          <p className="form__hint">Choose a password with at least 12 characters. Use a unique password for your GTN account.</p>
+          <form className="form" onSubmit={onChangeProfilePassword}>
+            <label><span>New password</span><span className="password-field"><input type={profileShowPassword ? "text" : "password"} autoComplete="new-password" minLength={12} value={profilePassword} onChange={(event) => setProfilePassword(event.target.value)} required /><button className="password-field__toggle" type="button" onClick={() => setProfileShowPassword((visible) => !visible)} aria-label={profileShowPassword ? "Hide password" : "Show password"} aria-pressed={profileShowPassword}><PasswordEyeIcon visible={profileShowPassword} /></button></span></label>
+            <label><span>Confirm new password</span><span className="password-field"><input type={profileShowPassword ? "text" : "password"} autoComplete="new-password" minLength={12} value={profilePasswordConfirm} onChange={(event) => setProfilePasswordConfirm(event.target.value)} required /><button className="password-field__toggle" type="button" onClick={() => setProfileShowPassword((visible) => !visible)} aria-label={profileShowPassword ? "Hide password" : "Show password"} aria-pressed={profileShowPassword}><PasswordEyeIcon visible={profileShowPassword} /></button></span></label>
+            <button className="btn" type="submit" disabled={profileBusy}>{profileBusy ? "Updating…" : "Update password"}</button>
+          </form>
+        </section>
+        {isSuperAdmin && <section className="admin__panel admin__panel--full owner-section owner-profile" aria-label="Site data management">
+          <div className="owner-section__heading"><span className="owner-section__eyebrow">SITE ADMINISTRATION</span><h2>Data management</h2></div>
+          <div className="owner-profile__tool"><div><h3>Download a backup</h3><p>Export stories, ads, categories, staff directory details, and reporter permissions as a JSON file. Uploaded media remains stored in Supabase.</p></div><button className="admin__edit" type="button" onClick={() => void onDownloadBackup()} disabled={profileBusy}>{profileBusy ? "Preparing…" : "Download backup"}</button></div>
+          <div className="owner-profile__danger"><div><h3>Reset site content</h3><p>Remove all stories, ads, and custom news categories. Staff accounts, reporter role settings, and uploaded media will remain available.</p></div><button className="admin__delete" type="button" disabled={resetBusy} onClick={() => void onResetSiteContent()}>{resetBusy ? "Resetting…" : "Reset site content"}</button></div>
+        </section>}
+      </>}
 
       {(isSuperAdmin || can("manage_staff")) && activePage === "staff" && <>
         <section id="admin-add-staff" className="admin__panel admin__panel--full owner-section" aria-label="Add staff">
@@ -533,6 +687,10 @@ export default function AdminPage() {
                 rows={3}
               />
             </label>
+            <label>
+              <span>Full story</span>
+              <textarea value={body} onChange={(event) => setBody(event.target.value)} placeholder="Write the full story here. Separate paragraphs with a blank line." rows={10} />
+            </label>
             <div className="admin__row">
               <label>
                 <span>Category</span>
@@ -561,6 +719,14 @@ export default function AdminPage() {
                 </select>
               </label>
             </div>
+            <fieldset className="story-promotions">
+              <legend>Promote this story</legend>
+              <p className="form__hint">Choose where it should be highlighted. You can select one or both.</p>
+              <div className="story-promotions__options">
+                <label><input type="checkbox" checked={isTrending} onChange={(event) => setIsTrending(event.target.checked)} /><span><b>Trending</b><small>Include in Trending Now</small></span></label>
+                <label><input type="checkbox" checked={isBreaking} onChange={(event) => setIsBreaking(event.target.checked)} /><span><b>Breaking</b><small>Show in the breaking news ticker</small></span></label>
+              </div>
+            </fieldset>
             <label>
               <span>Show on</span>
               <select
@@ -585,113 +751,38 @@ export default function AdminPage() {
               />
             </label>
 
-            <fieldset className="form__fieldset">
-              <legend>Media</legend>
+            <fieldset className="form__fieldset story-media-uploader">
+              <legend>Story media</legend>
+              <p className="form__hint">Select multiple images, videos, and audio files together. Files are stored with the story.</p>
               <label>
-                <span>Attach</span>
-                <select
-                  value={mediaKind}
-                  onChange={(e) => setMediaKind(e.target.value as MediaKind)}
-                >
-                  <option value="none">None</option>
-                  <option value="image">Picture</option>
-                  <option value="video">Upload video</option>
+                <span>Upload media files</span>
+                <input className="form__file" type="file" accept="image/*,video/*,audio/*" multiple onChange={onMediaFilesChange} aria-label="Select multiple story media files" />
+              </label>
+              <div className="story-recorder">
+                <div><b>Record audio</b><span>Use your device microphone to add a voice clip.</span></div>
+                {!recording ? <button className="story-recorder__start" type="button" onClick={() => void startAudioRecording()} disabled={mediaUploading}>● Record</button> : <button className="story-recorder__stop" type="button" onClick={stopAudioRecording}>■ Stop recording</button>}
+              </div>
+              {mediaUploading && <p className="form__hint">Uploading media…</p>}
+              {mediaNote && <p className={mediaNote.includes("ready") ? "form__hint form__hint--ok" : "form__hint form__hint--error"}>{mediaNote}</p>}
+              {mediaAssets.length > 0 && <ul className="story-media-files">{mediaAssets.map((asset, index) => <li key={`${asset.url}-${index}`}>
+                <span className="story-media-files__type">{asset.type}</span>
+                <span className="story-media-files__name">{asset.name || asset.url.split("/").pop() || asset.type}</span>
+                {asset.type === "image" && <img src={asset.url} alt="" />}
+                {asset.type === "audio" && <audio controls src={asset.url} />}
+                <button type="button" aria-label={`Remove ${asset.name || asset.type}`} onClick={() => setMediaAssets((current) => current.filter((_, itemIndex) => itemIndex !== index))}>Remove</button>
+              </li>)}</ul>}
+              <label>
+                <span>Add YouTube or TikTok link (optional)</span>
+                <select value={mediaKind} onChange={(event) => setMediaKind(event.target.value as MediaKind)}>
+                  <option value="none">No external video</option>
                   <option value="youtube">YouTube link</option>
                   <option value="tiktok">TikTok link</option>
                 </select>
               </label>
-
-              {mediaKind === "image" && (
-                <>
-                  <input
-                    className="form__file"
-                    type="file"
-                    accept="image/*"
-                    onChange={onFileChange}
-                    aria-label="Choose a picture"
-                  />
-                  {imageData ? (
-                    <img
-                      className="form__preview"
-                      src={imageData}
-                      alt="Selected picture preview"
-                    />
-                  ) : (
-                    <p className="form__hint">
-                      Upload a picture file to feature on the story.
-                    </p>
-                  )}
-                  {mediaNote && (
-                    <p className="form__hint form__hint--error">{mediaNote}</p>
-                  )}
-                </>
-              )}
-
-              {mediaKind === "video" && (
-                <>
-                  <input
-                    className="form__file"
-                    type="file"
-                    accept={VIDEO_ACCEPT}
-                    onChange={onVideoChange}
-                    aria-label="Upload a video file"
-                  />
-                  {videoName ? (
-                    <>
-                      <p className="form__hint form__hint--ok">
-                        Ready: {videoName}
-                      </p>
-                      <p className="form__hint">
-                        The video is stored on this device and will play on the
-                        story page.
-                      </p>
-                    </>
-                  ) : (
-                    <p className="form__hint">
-                      Upload an MP4 or WebM file (under {VIDEO_MAX_MB} MB) to
-                      feature on the story.
-                    </p>
-                  )}
-                  {mediaNote && (
-                    <p className="form__hint form__hint--error">{mediaNote}</p>
-                  )}
-                </>
-              )}
-
-              {isUrlKind && (
-                <>
-                  <input
-                    type="text"
-                    value={mediaUrl}
-                    onChange={(e) => setMediaUrl(e.target.value)}
-                    placeholder={
-                      mediaKind === "youtube"
-                        ? "https://www.youtube.com/watch?v=…"
-                        : "https://www.tiktok.com/@user/video/…"
-                    }
-                  />
-                  {mediaUrl.trim() ? (
-                    <p
-                      className={
-                        urlError
-                          ? "form__hint form__hint--error"
-                          : "form__hint form__hint--ok"
-                      }
-                    >
-                      {urlError ??
-                        "Link looks valid — it will play on the story page."}
-                    </p>
-                  ) : (
-                    <p className="form__hint">
-                      Paste a {mediaKind === "youtube" ? "YouTube" : "TikTok"}{" "}
-                      link to embed the video on the story.
-                    </p>
-                  )}
-                </>
-              )}
+              {isUrlKind && <label><span>{mediaKind === "youtube" ? "YouTube" : "TikTok"} URL</span><input type="url" value={mediaUrl} onChange={(event) => setMediaUrl(event.target.value)} placeholder={mediaKind === "youtube" ? "https://www.youtube.com/watch?v=…" : "https://www.tiktok.com/@user/video/…"} />{urlError && <span className="form__hint form__hint--error">{urlError}</span>}</label>}
             </fieldset>
 
-            <div className="admin__form-actions"><button className="btn" type="submit">{editingId ? "Save changes" : "Publish story"}</button>{editingId && <button className="admin__edit" type="button" onClick={resetForm}>Cancel edit</button>}</div>
+            <div className="admin__form-actions"><button className="btn" type="submit" disabled={mediaUploading || recording}>{editingId ? "Save changes" : "Publish story"}</button>{editingId && <button className="admin__edit" type="button" onClick={resetForm}>Cancel edit</button>}</div>
           </form>
         </section>}
 
@@ -718,15 +809,7 @@ export default function AdminPage() {
                   </Link>
                   <span className="admin__item-meta">
                     {story.category} · {story.time}
-                    {story.media && (
-                      <em className="admin__mine">
-                        {" "}
-                        ·{" "}
-                        {story.media.type === "image"
-                          ? "picture"
-                          : story.media.type}
-                      </em>
-                    )}
+                    {storyMediaItems(story.media).length > 0 && <em className="admin__mine"> · {storyMediaItems(story.media).map((media) => media.type === "image" ? "picture" : media.type).join(", ")}</em>}
                     {story.placement === "for-you" && (
                       <em className="admin__mine"> · For You</em>
                     )}
@@ -764,7 +847,7 @@ export default function AdminPage() {
             <label>
               <span>Destination URL (optional)</span>
               <input
-                type="text"
+                type="url"
                 value={adUrl}
                 onChange={(e) => setAdUrl(e.target.value)}
                 placeholder="https://example.com"
@@ -886,10 +969,11 @@ export default function AdminPage() {
                   <button
                     className="admin__delete"
                     type="button"
-                    onClick={() => deleteAd(ad.id)}
+                    onClick={() => void onDeleteAd(ad.id, ad.headline)}
+                    disabled={deletingAdId === ad.id}
                     aria-label={`Delete ad ${ad.headline}`}
                   >
-                    Delete
+                    {deletingAdId === ad.id ? "Deleting…" : "Delete"}
                   </button>
                 </li>
               ))}
@@ -905,4 +989,8 @@ export default function AdminPage() {
       </div>
     </main>
   );
+}
+
+function PasswordEyeIcon({ visible }: { visible: boolean }) {
+  return <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{visible ? <><path d="M3 3l18 18"/><path d="M10.6 10.6a2 2 0 0 0 2.8 2.8"/><path d="M9.9 5.2A11 11 0 0 1 12 5c5 0 9 5 9 7a9.7 9.7 0 0 1-2.2 3.2M6.2 6.2C3.9 7.7 3 10 3 12c0 2 4 7 9 7 1.1 0 2.1-.2 3-.6"/></> : <><path d="M2.5 12s3.4-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.4 6.5-9.5 6.5S2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.7"/></>}</svg>;
 }

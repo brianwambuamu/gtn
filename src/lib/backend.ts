@@ -16,10 +16,17 @@ export function saveSession(session: Session | null) {
 async function request<T>(path: string, options: RequestInit = {}, token?: string): Promise<T> {
   if (!backendConfigured) throw new Error("Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
   const currentToken = token || getSession()?.access_token;
-  const send = (accessToken?: string) => fetch(`${url}${path}`, { ...options, headers: {
-    apikey: anonKey!, Authorization: `Bearer ${accessToken || anonKey}`,
-    "Content-Type": "application/json", ...(options.headers || {}),
-  }});
+  const send = async (accessToken?: string) => {
+    try {
+      return await fetch(`${url}${path}`, { ...options, headers: {
+        apikey: anonKey!, Authorization: `Bearer ${accessToken || anonKey}`,
+        "Content-Type": "application/json", ...(options.headers || {}),
+      }});
+    } catch (cause) {
+      if (cause instanceof TypeError) throw new Error(`Could not reach Supabase${url ? ` at ${new URL(url).host}` : ""}. Check the connection and project URL, then try again.`);
+      throw cause;
+    }
+  };
   let response = await send(currentToken);
   const currentSession = getSession();
   if (response.status === 401 && token !== anonKey && currentSession?.refresh_token && !path.includes("grant_type=refresh_token")) {
@@ -42,11 +49,12 @@ export const backend = {
   insert: <T,>(table: string, body: unknown) => request<T[]>(`/rest/v1/${table}`, { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify(body) }, getSession()?.access_token),
   update: <T,>(table: string, query: string, body: unknown) => request<T[]>(`/rest/v1/${table}?${query}`, { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify(body) }, getSession()?.access_token),
   remove: (table: string, query: string) => request<unknown>(`/rest/v1/${table}?${query}`, { method: "DELETE" }, getSession()?.access_token),
+  removeRows: <T,>(table: string, query: string) => request<T[]>(`/rest/v1/${table}?${query}`, { method: "DELETE", headers: { Prefer: "return=representation" } }, getSession()?.access_token),
   rpc: <T,>(name: string, body: unknown) => request<T>(`/rest/v1/rpc/${name}`, { method: "POST", body: JSON.stringify(body) }, getSession()?.access_token),
   invoke: <T,>(name: string, body: unknown) => request<T>(`/functions/v1/${name}`, { method: "POST", body: JSON.stringify(body) }, getSession()?.access_token),
   async upload(file: File, bucket = "editorial-media"): Promise<string> {
     const key = `${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "-")}`;
-    const response = await fetch(`${url}/storage/v1/object/${bucket}/${key}`, { method: "POST", headers: { apikey: anonKey!, Authorization: `Bearer ${getSession()?.access_token || anonKey}`, "Content-Type": file.type, "x-upsert": "false" }, body: file });
+    const response = await fetch(`${url}/storage/v1/object/${bucket}/${key}`, { method: "POST", headers: { apikey: anonKey!, Authorization: `Bearer ${getSession()?.access_token || anonKey}`, "Content-Type": file.type.split(";")[0] || "application/octet-stream", "x-upsert": "false" }, body: file });
     if (!response.ok) throw new Error("Could not upload media to Supabase Storage.");
     return `${url}/storage/v1/object/public/${bucket}/${key}`;
   },

@@ -6,13 +6,20 @@ import { useAuth } from "./AuthContext";
 export type AdMedia = { type: "image" | "video"; url: string };
 export type Ad = { id: string; headline: string; url?: string; media?: AdMedia; target?: string };
 export type NewAdInput = { headline: string; url?: string; media?: AdMedia; target?: string };
-type AdsContextValue = { ads: Ad[]; addAd: (input: NewAdInput) => Promise<Ad>; deleteAd: (id: string) => Promise<void> };
+type AdsContextValue = { ads: Ad[]; addAd: (input: NewAdInput) => Promise<Ad>; deleteAd: (id: string) => Promise<void>; refreshAds: () => Promise<void> };
 const AdsContext = createContext<AdsContextValue | null>(null);
 export function AdsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth(); const [ads, setAds] = useState<Ad[]>([]);
+  async function refreshAds() { if (!backendConfigured) return; const rows = await backend.rows<Ad>("ads", "select=*&active=eq.true&order=created_at.desc"); setAds(rows); }
   useEffect(() => { if (!backendConfigured) return; let active = true; backend.rows<Ad>("ads", "select=*&active=eq.true&order=created_at.desc").then((rows) => { if (active) setAds(rows); }).catch((error) => console.error("Unable to load ads from Supabase", error)); return () => { active = false; }; }, [user]);
   async function addAd(input: NewAdInput) { const draft = { id: crypto.randomUUID(), headline: input.headline.trim(), url: input.url || undefined, media: input.media, target: input.target || undefined }; const rows = await backend.insert<Ad>("ads", { ...draft, active: true }); const saved = rows[0] || draft; setAds((prev) => [saved, ...prev]); return saved; }
-  async function deleteAd(id: string) { await backend.remove("ads", `id=eq.${encodeURIComponent(id)}`); setAds((prev) => prev.filter((ad) => ad.id !== id)); }
-  return <AdsContext.Provider value={{ ads, addAd, deleteAd }}>{children}</AdsContext.Provider>;
+  async function deleteAd(id: string) {
+    const filter = `id=eq.${encodeURIComponent(id)}`;
+    await backend.remove("ads", filter);
+    const remaining = await backend.rows<Pick<Ad, "id">>("ads", `select=id&${filter}&limit=1`);
+    if (remaining.length > 0) throw new Error("Supabase did not remove the ad. Check your advertising permission and try again.");
+    setAds((prev) => prev.filter((ad) => ad.id !== id));
+  }
+  return <AdsContext.Provider value={{ ads, addAd, deleteAd, refreshAds }}>{children}</AdsContext.Provider>;
 }
 export function useAds() { const context = useContext(AdsContext); if (!context) throw new Error("useAds must be used within an AdsProvider"); return context; }

@@ -8,12 +8,15 @@ export type Story = {
   id: string;
   title: string;
   excerpt?: string;
+  body?: string;
   category: string;
   time: string;
   publishedAt?: string;
   seed: number;
   badge?: Badge;
   author?: string;
-  media?: StoryMedia;
+  media?: StoryMedia | StoryMedia[];
   placement?: Placement;
+  is_trending?: boolean;
+  is_breaking?: boolean;
 };

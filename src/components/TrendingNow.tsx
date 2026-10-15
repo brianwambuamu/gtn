@@ -8,7 +8,9 @@ type Props = {
 
 export default function TrendingNow({ id, title = "trending now" }: Props) {
   const { stories } = useNews();
-  const items = stories.slice(0, 5);
+  const selected = stories.filter((story) => story.is_trending);
+  const items = (selected.length ? selected : stories).slice(0, 5);
+  if (!items.length) return null;
 
   return (
     <section className="trending" id={id}>

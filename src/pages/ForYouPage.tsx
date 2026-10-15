@@ -10,6 +10,7 @@ import { channelUrl } from "../data/videos";
 import { slugify } from "../data/categories";
 import { useNews } from "../store/NewsContext";
 import { useCategories } from "../store/CategoriesContext";
+import { useAds } from "../store/AdsContext";
 
 function feedRows(items: Story[]): Story[][] {
   const rows: Story[][] = [];
@@ -23,17 +24,19 @@ function feedRows(items: Story[]): Story[][] {
 export default function ForYouPage() {
   const { stories } = useNews();
   const { categories } = useCategories();
+  const { ads } = useAds();
+  const hasHomeAds = ads.some((ad) => !ad.target || ad.target === "home");
   const [lead, ...rest] = stories;
   const top = rest.slice(0, 3);
   const feed = rest.slice(3);
 
   return <>
-    <main className="container main" id="top">
+    <main className={`container main for-you-page${hasHomeAds ? "" : " for-you-page--no-ads"}`} id="top">
       <AdSlot className="ad--top" />
       {lead ? <div className="hero-cd">
         <div className="hero-cd__main">
           <article className="pin">
-            <Link className="pin__media" to={`/story/${lead.id}`} tabIndex={-1} aria-hidden="true"><StoryMedia story={lead} ratio="16 / 9" /></Link>
+            <Link className="pin__media" to={`/story/${lead.id}`} tabIndex={-1} aria-hidden="true"><StoryMedia story={lead} ratio="16 / 10" /></Link>
             <div className="pin__body"><span className="kicker">{lead.category}</span><h1 className="pin__title"><Link to={`/story/${lead.id}`}>{lead.title}</Link></h1><span className="pin__meta"><span>By {lead.author || "GTN Newsroom"}</span><time dateTime={lead.publishedAt}>{lead.time}</time></span></div>
           </article>
           {top.length > 0 && <div className="toprow">{top.map((story) => <StoryCard key={story.id} story={story} corner="Top Stories" />)}</div>}

@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { backend, backendConfigured, getSession, saveSession, SESSION_KEY } from "../lib/backend";
 
 export type StaffRole = "super_admin" | "reporter";
-export type StaffUser = { id: string; email: string; role: StaffRole; display_name: string; is_active: boolean };
+export type StaffUser = { id: string; email: string; role: StaffRole; display_name: string; is_active: boolean; created_at?: string };
 const IDLE_TIMEOUT_MS = 10 * 60 * 1000;
 const LAST_ACTIVITY_KEY = "gtn.staff-last-activity";
 type AuthValue = { user: StaffUser | null; loading: boolean; error: string; configured: boolean; invitationPending: boolean; completeInvitation: (password: string) => Promise<void>; signIn: (email: string, password: string) => Promise<void>; signOut: () => Promise<void>; inviteReporter: (email: string, displayName: string) => Promise<void>; manageStaff: (action:"delete"|"deactivate"|"activate", userId:string)=>Promise<void> };
@@ -42,7 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       if (session) {
         try {
-          const rows = await backend.rows<StaffUser>("staff_profiles", `select=id,email,role,display_name,is_active&id=eq.${session.user.id}&limit=1`);
+          const rows = await backend.rows<StaffUser>("staff_profiles", `select=id,email,role,display_name,is_active,created_at&id=eq.${session.user.id}&limit=1`);
           if (rows[0] && !rows[0].is_active) { saveSession(null); if (active) setError("This staff account is inactive. Contact the Super Admin."); }
           else if (active) setUser(rows[0] || null);
         } catch { saveSession(null); }
@@ -101,7 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const session = await backend.auth("token?grant_type=password", { email: email.trim(), password });
       saveSession(session);
-      const profiles = await backend.rows<StaffUser>("staff_profiles", `select=id,email,role,display_name,is_active&id=eq.${session.user.id}&limit=1`);
+      const profiles = await backend.rows<StaffUser>("staff_profiles", `select=id,email,role,display_name,is_active,created_at&id=eq.${session.user.id}&limit=1`);
       if (!profiles[0]) { saveSession(null); throw new Error("This account has no staff role. Ask the super admin to invite you."); }
       if (!profiles[0].is_active) { saveSession(null); throw new Error("This staff account is inactive. Contact the Super Admin."); }
       localStorage.setItem(LAST_ACTIVITY_KEY, String(Date.now()));
@@ -114,7 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await backend.changePassword(password);
     setInvitationPending(false);
     const session = getSession();
-    const profiles = session ? await backend.rows<StaffUser>("staff_profiles", `select=id,email,role,display_name,is_active&id=eq.${session.user.id}&limit=1`) : [];
+    const profiles = session ? await backend.rows<StaffUser>("staff_profiles", `select=id,email,role,display_name,is_active,created_at&id=eq.${session.user.id}&limit=1`) : [];
     if (profiles[0]) localStorage.setItem(LAST_ACTIVITY_KEY, String(Date.now()));
     setUser(profiles[0] || null);
   }

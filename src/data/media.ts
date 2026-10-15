@@ -1,6 +1,7 @@
 export type StoryMedia = {
-  type: "image" | "youtube" | "tiktok" | "video";
+  type: "image" | "youtube" | "tiktok" | "video" | "audio";
   url: string;
+  name?: string;
 };
 
 export const VIDEO_ACCEPT = "video/mp4,video/webm,video/ogg,video/quicktime";
@@ -45,4 +46,9 @@ export function mediaError(
     return "Use a full TikTok video link, e.g. https://www.tiktok.com/@user/video/123456789.";
   }
   return null;
+}
+
+export function storyMediaItems(media?: StoryMedia | StoryMedia[] | null): StoryMedia[] {
+  if (!media) return [];
+  return Array.isArray(media) ? media : [media];
 }

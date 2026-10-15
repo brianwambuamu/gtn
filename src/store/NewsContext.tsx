@@ -7,7 +7,7 @@ import type { Badge, Placement, Story } from "../data/news";
 import { backend, backendConfigured, getSession } from "../lib/backend";
 import { useAuth } from "./AuthContext";
 
-export type NewStoryInput = { title: string; excerpt?: string; category: string; author?: string; badge?: Badge; media?: StoryMedia; placement?: Placement };
+export type NewStoryInput = { title: string; excerpt?: string; body?: string; category: string; author?: string; badge?: Badge; media?: StoryMedia | StoryMedia[]; placement?: Placement; is_trending?: boolean; is_breaking?: boolean };
 type DbStory = Omit<Story, "time"> & { time?: string; reporter_id?: string; created_at?: string };
 
 function formatPublishedAt(value?: string): string {
@@ -49,16 +49,16 @@ export function NewsProvider({ children }: { children: ReactNode }) {
     setCustomStories(rows.map(normalizeStory));
   }
   async function addStory(input: NewStoryInput) {
-    const draft: Story = { id: crypto.randomUUID(), title: input.title.trim(), excerpt: input.excerpt?.trim() || undefined, category: input.category, time: "Just now", seed: Math.floor(Math.random() * 50) + 1, badge: input.badge, author: input.author?.trim() || user?.display_name || "GTN Newsroom", media: input.media, placement: input.placement };
+    const draft: Story = { id: crypto.randomUUID(), title: input.title.trim(), excerpt: input.excerpt?.trim() || undefined, body: input.body?.trim() || undefined, category: input.category, time: "Just now", seed: Math.floor(Math.random() * 50) + 1, badge: input.badge, author: input.author?.trim() || user?.display_name || "GTN Newsroom", media: input.media, placement: input.placement, is_trending: input.is_trending, is_breaking: input.is_breaking };
     if (!backendConfigured) throw new Error("Connect Supabase before publishing stories.");
-    const rows = await backend.insert<DbStory>("stories", { id: draft.id, title: draft.title, excerpt: draft.excerpt, category: draft.category, author: draft.author, badge: draft.badge, media: draft.media, placement: draft.placement, seed: draft.seed, reporter_id: getSession()?.user.id, status: "published" });
+    const rows = await backend.insert<DbStory>("stories", { id: draft.id, title: draft.title, excerpt: draft.excerpt, body: draft.body, category: draft.category, author: draft.author, badge: draft.badge, media: draft.media, placement: draft.placement, is_trending: draft.is_trending, is_breaking: draft.is_breaking, seed: draft.seed, reporter_id: getSession()?.user.id, status: "published" });
     const saved = rows[0] ? normalizeStory(rows[0]) : draft; setCustomStories((prev) => [saved, ...prev]); return saved;
   }
   async function deleteStory(id: string) {
     if (customStories.some((story) => story.id === id)) { await backend.remove("stories", `id=eq.${encodeURIComponent(id)}`); setCustomStories((prev) => prev.filter((story) => story.id !== id)); }
   }
   async function updateStory(id: string, input: NewStoryInput) {
-    await backend.update("stories", `id=eq.${encodeURIComponent(id)}`, { title: input.title.trim(), excerpt: input.excerpt?.trim() || null, category: input.category, author: input.author?.trim() || user?.display_name || "GTN Newsroom", badge: input.badge || null, media: input.media || null, placement: input.placement || null });
+    await backend.update("stories", `id=eq.${encodeURIComponent(id)}`, { title: input.title.trim(), excerpt: input.excerpt?.trim() || null, body: input.body?.trim() || null, category: input.category, author: input.author?.trim() || user?.display_name || "GTN Newsroom", badge: input.badge || null, media: input.media || null, placement: input.placement || null, is_trending: input.is_trending || false, is_breaking: input.is_breaking || false });
     setCustomStories((prev) => prev.map((story) => story.id === id ? { ...story, ...input, title: input.title.trim(), author: input.author?.trim() || user?.display_name || "GTN Newsroom", time: "Just updated" } : story));
   }
   function getStory(id: string) { return stories.find((story) => story.id === id); }
