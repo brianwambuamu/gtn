@@ -10,6 +10,7 @@ export type Story = {
   excerpt?: string;
   category: string;
   time: string;
+  publishedAt?: string;
   seed: number;
   badge?: Badge;
   author?: string;

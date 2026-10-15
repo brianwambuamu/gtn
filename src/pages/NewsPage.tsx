@@ -4,7 +4,7 @@ import type { Story } from "../data/news";
 import AdSlot from "../components/AdSlot";
 import CategoryTabs from "../components/CategoryTabs";
 import StoryCard from "../components/StoryCard";
-import StoryImage from "../components/StoryImage";
+import StoryMedia from "../components/StoryMedia";
 import TrendingNow from "../components/TrendingNow";
 import VideoListMini from "../components/VideoListMini";
 import { useNews } from "../store/NewsContext";
@@ -96,7 +96,7 @@ export default function NewsPage() {
                 tabIndex={-1}
                 aria-hidden="true"
               >
-                <StoryImage seed={lead.seed} ratio="16 / 9" />
+                <StoryMedia story={lead} ratio="16 / 9" />
               </Link>
               <div className="pin__body">
                 <span className="kicker">{lead.category}</span>

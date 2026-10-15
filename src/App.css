@@ -2321,3 +2321,33 @@
   .owner-dashboard__add { background: linear-gradient(135deg, #ff9a45, var(--orange)); color: #fff; }
   .owner-dashboard__add:hover { background: linear-gradient(135deg, #ffa657, #e96f15); }
 }
+
+.pin__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 12px; margin-top: 10px; color: #667386; font-size: 12px; font-weight: 600; }
+.pin__meta time, .card__meta time { color: #788597; font-size: 11px; font-weight: 500; }
+.card__meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 10px; margin-top: 8px; }
+.card__meta .card__byline { margin-top: 0; font-size: 12px; }
+.story-media--img { height: auto; object-fit: cover; }
+@media (max-width: 600px) {
+  .pin__meta { margin-top: 8px; font-size: 11px; }
+  .card__meta { gap: 3px 8px; }
+  .card__meta .card__byline, .card__meta time { font-size: 10px; }
+}
+
+/* Keep story action menus above adjacent rows and inside the scrollable list. */
+.admin__list--scroll-15 { position: relative; overflow-x: visible; }
+.admin__list--scroll-15 .admin__item { position: relative; overflow: visible; }
+.admin__list--scroll-15 .admin__item--menu-open { z-index: 12; }
+.story-action-menu { z-index: 1; }
+.story-action-menu__items { z-index: 30; }
+.story-action-menu__items--up { top: auto; bottom: calc(100% + 5px); }
+@media (max-width: 600px) {
+  .admin__list--scroll-15 .admin__item,
+  .admin__list--scroll-15 .admin__item.owner-staff-item { flex-direction: row; align-items: center; gap: 8px; }
+  .admin__list--scroll-15 .admin__item > div:first-child { flex: 1 1 auto; width: 0; min-width: 0; }
+  .admin__list--scroll-15 .admin__item-title { display: block; max-width: 100%; font-size: 13px; }
+  .admin__list--scroll-15 .admin__item-meta { max-width: 100%; font-size: 10px; }
+  .admin__list--scroll-15 .story-action-menu { flex: 0 0 42px; align-self: center; }
+  .admin__list--scroll-15 .story-action-menu__trigger { width: 42px; height: 42px; border-radius: 12px; }
+  .admin__list--scroll-15 .story-action-menu__trigger span { font-size: 27px; }
+  .admin__list--scroll-15 .story-action-menu__items { width: 160px; }
+}

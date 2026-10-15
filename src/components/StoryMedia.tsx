@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { CSSProperties } from "react";
 import type { Story } from "../data/news";
 import { useVideoUrl } from "../lib/videoStorage";
@@ -51,6 +52,12 @@ function VideoTile({
   );
 }
 
+function UploadedImage({ story, ratio, url }: { story: Story; ratio: string; url: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return <StoryImage seed={story.seed} ratio={ratio} />;
+  return <img className="story-media story-media--img" src={url} alt={story.title} loading="lazy" style={{ aspectRatio: ratio }} onError={() => setFailed(true)} />;
+}
+
 export default function StoryMedia({ story, ratio = "16 / 9" }: Props) {
   const media = story.media;
 
@@ -61,15 +68,7 @@ export default function StoryMedia({ story, ratio = "16 / 9" }: Props) {
   const style: CSSProperties = { aspectRatio: ratio };
 
   if (media.type === "image") {
-    return (
-      <img
-        className="story-media story-media--img"
-        src={media.url}
-        alt=""
-        loading="lazy"
-        style={style}
-      />
-    );
+    return <UploadedImage story={story} ratio={ratio} url={media.url} />;
   }
 
   if (media.type === "video") {

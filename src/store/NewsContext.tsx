@@ -8,7 +8,23 @@ import { backend, backendConfigured, getSession } from "../lib/backend";
 import { useAuth } from "./AuthContext";
 
 export type NewStoryInput = { title: string; excerpt?: string; category: string; author?: string; badge?: Badge; media?: StoryMedia; placement?: Placement };
-type DbStory = Story & { reporter_id?: string; created_at?: string };
+type DbStory = Omit<Story, "time"> & { time?: string; reporter_id?: string; created_at?: string };
+
+function formatPublishedAt(value?: string): string {
+  if (!value) return "Just now";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Recently published";
+  return new Intl.DateTimeFormat("en-KE", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Africa/Nairobi",
+  }).format(date);
+}
+
+function normalizeStory(row: DbStory): Story {
+  const publishedAt = row.created_at || row.publishedAt;
+  return { ...row, publishedAt, time: formatPublishedAt(publishedAt) };
+}
 type NewsContextValue = { stories: Story[]; newsStories: Story[]; customStories: Story[]; deletedIds: string[]; loading: boolean; addStory: (input: NewStoryInput) => Promise<Story>; updateStory: (id: string, input: NewStoryInput) => Promise<void>; deleteStory: (id: string) => Promise<void>; refreshStories: () => Promise<void>; getStory: (id: string) => Story | undefined; categoryStories: (slug: string) => Story[]; };
 const NewsContext = createContext<NewsContextValue | null>(null);
 
@@ -21,7 +37,7 @@ export function NewsProvider({ children }: { children: ReactNode }) {
     if (!backendConfigured) return;
     let active = true;
     backend.rows<DbStory>("stories", "select=*&status=eq.published&order=created_at.desc").then((rows) => {
-      if (active) setCustomStories(rows.map((story) => ({ ...story, time: story.created_at ? new Date(story.created_at).toLocaleDateString() : story.time })));
+      if (active) setCustomStories(rows.map(normalizeStory));
     }).catch((error) => console.error("Unable to load stories from Supabase", error)).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [user]);
@@ -30,13 +46,13 @@ export function NewsProvider({ children }: { children: ReactNode }) {
   async function refreshStories() {
     if (!backendConfigured) return;
     const rows = await backend.rows<DbStory>("stories", "select=*&status=eq.published&order=created_at.desc");
-    setCustomStories(rows.map((story) => ({ ...story, time: story.created_at ? new Date(story.created_at).toLocaleDateString() : story.time })));
+    setCustomStories(rows.map(normalizeStory));
   }
   async function addStory(input: NewStoryInput) {
     const draft: Story = { id: crypto.randomUUID(), title: input.title.trim(), excerpt: input.excerpt?.trim() || undefined, category: input.category, time: "Just now", seed: Math.floor(Math.random() * 50) + 1, badge: input.badge, author: input.author?.trim() || user?.display_name || "GTN Newsroom", media: input.media, placement: input.placement };
     if (!backendConfigured) throw new Error("Connect Supabase before publishing stories.");
     const rows = await backend.insert<DbStory>("stories", { id: draft.id, title: draft.title, excerpt: draft.excerpt, category: draft.category, author: draft.author, badge: draft.badge, media: draft.media, placement: draft.placement, seed: draft.seed, reporter_id: getSession()?.user.id, status: "published" });
-    const saved = rows[0] || draft; setCustomStories((prev) => [saved, ...prev]); return saved;
+    const saved = rows[0] ? normalizeStory(rows[0]) : draft; setCustomStories((prev) => [saved, ...prev]); return saved;
   }
   async function deleteStory(id: string) {
     if (customStories.some((story) => story.id === id)) { await backend.remove("stories", `id=eq.${encodeURIComponent(id)}`); setCustomStories((prev) => prev.filter((story) => story.id !== id)); }

@@ -711,7 +711,7 @@ export default function AdminPage() {
             {visible.map((story) => {
               const storedStory = customStories.find((item) => item.id === story.id) as (typeof story & { reporter_id?: string }) | undefined;
               const canManage = Boolean(storedStory && (isSuperAdmin || can("manage_all_stories") || (can("manage_own_stories") && storedStory.reporter_id === user.id)));
-              return <li className="admin__item" key={story.id}>
+              return <li className={`admin__item${openStoryMenu === story.id ? " admin__item--menu-open" : ""}`} key={story.id}>
                 <div>
                   <Link className="admin__item-title" to={`/story/${story.id}`}>
                     {story.title}
@@ -738,7 +738,7 @@ export default function AdminPage() {
                     )}
                   </span>
                 </div>
-                {canManage && <div className="story-action-menu"><button className="story-action-menu__trigger" type="button" aria-label={`Actions for ${story.title}`} aria-haspopup="menu" aria-expanded={openStoryMenu === story.id} onClick={() => setOpenStoryMenu(openStoryMenu === story.id ? null : story.id)}><span aria-hidden="true">⋮</span></button>{openStoryMenu === story.id && <div className="story-action-menu__items" role="menu"><button type="button" role="menuitem" onClick={() => {setOpenStoryMenu(null);editStory(story);}}>Edit story</button><button className="story-action-menu__delete" type="button" role="menuitem" onClick={() => {setOpenStoryMenu(null);if(window.confirm(`Delete “${story.title}”? This cannot be undone.`))onDelete(story.id);}}>Delete story</button></div>}</div>}
+                {canManage && <div className="story-action-menu"><button className="story-action-menu__trigger" type="button" aria-label={`Actions for ${story.title}`} aria-haspopup="menu" aria-expanded={openStoryMenu === story.id} onClick={() => setOpenStoryMenu(openStoryMenu === story.id ? null : story.id)}><span aria-hidden="true">⋮</span></button>{openStoryMenu === story.id && <div className={`story-action-menu__items${visible.length > 3 && visible.indexOf(story) >= visible.length - 2 ? " story-action-menu__items--up" : ""}`} role="menu"><button type="button" role="menuitem" onClick={() => {setOpenStoryMenu(null);editStory(story);}}>Edit story</button><button className="story-action-menu__delete" type="button" role="menuitem" onClick={() => {setOpenStoryMenu(null);if(window.confirm(`Delete “${story.title}”? This cannot be undone.`))onDelete(story.id);}}>Delete story</button></div>}</div>}
               </li>
             })}
           </ul>

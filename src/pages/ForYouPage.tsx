@@ -3,7 +3,7 @@ import type { Story } from "../data/news";
 import AdSlot from "../components/AdSlot";
 import Section from "../components/Section";
 import StoryCard from "../components/StoryCard";
-import StoryImage from "../components/StoryImage";
+import StoryMedia from "../components/StoryMedia";
 import TrendingNow from "../components/TrendingNow";
 import VideoStrip from "../components/VideoStrip";
 import { channelUrl } from "../data/videos";
@@ -33,8 +33,8 @@ export default function ForYouPage() {
       {lead ? <div className="hero-cd">
         <div className="hero-cd__main">
           <article className="pin">
-            <Link className="pin__media" to={`/story/${lead.id}`} tabIndex={-1} aria-hidden="true"><StoryImage seed={lead.seed} ratio="16 / 9" /></Link>
-            <div className="pin__body"><span className="kicker">{lead.category}</span><h1 className="pin__title"><Link to={`/story/${lead.id}`}>{lead.title}</Link></h1><span className="pin__byline">By {lead.author || "GTN Newsroom"}</span></div>
+            <Link className="pin__media" to={`/story/${lead.id}`} tabIndex={-1} aria-hidden="true"><StoryMedia story={lead} ratio="16 / 9" /></Link>
+            <div className="pin__body"><span className="kicker">{lead.category}</span><h1 className="pin__title"><Link to={`/story/${lead.id}`}>{lead.title}</Link></h1><span className="pin__meta"><span>By {lead.author || "GTN Newsroom"}</span><time dateTime={lead.publishedAt}>{lead.time}</time></span></div>
           </article>
           {top.length > 0 && <div className="toprow">{top.map((story) => <StoryCard key={story.id} story={story} corner="Top Stories" />)}</div>}
         </div>
