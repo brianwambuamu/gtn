@@ -52,7 +52,13 @@ export function NewsProvider({ children }: { children: ReactNode }) {
     const draft: Story = { id: crypto.randomUUID(), title: input.title.trim(), excerpt: input.excerpt?.trim() || undefined, body: input.body?.trim() || undefined, category: input.category, time: "Just now", seed: Math.floor(Math.random() * 50) + 1, badge: input.badge, author: input.author?.trim() || user?.display_name || "GTN Newsroom", media: input.media, placement: input.placement, is_trending: input.is_trending, is_breaking: input.is_breaking };
     if (!backendConfigured) throw new Error("Connect Supabase before publishing stories.");
     const rows = await backend.insert<DbStory>("stories", { id: draft.id, title: draft.title, excerpt: draft.excerpt, body: draft.body, category: draft.category, author: draft.author, badge: draft.badge, media: draft.media, placement: draft.placement, is_trending: draft.is_trending, is_breaking: draft.is_breaking, seed: draft.seed, reporter_id: getSession()?.user.id, status: "published" });
-    const saved = rows[0] ? normalizeStory(rows[0]) : draft; setCustomStories((prev) => [saved, ...prev]); return saved;
+    const saved = rows[0] ? normalizeStory(rows[0]) : draft;
+    setCustomStories((prev) => [saved, ...prev]);
+    // Notification delivery is best effort: never make a successful publish look failed.
+    void backend.invoke("send-push-notifications", { story_id: saved.id }).catch((error) => {
+      console.warn("Story published, but push notifications could not be sent.", error);
+    });
+    return saved;
   }
   async function deleteStory(id: string) {
     if (customStories.some((story) => story.id === id)) { await backend.remove("stories", `id=eq.${encodeURIComponent(id)}`); setCustomStories((prev) => prev.filter((story) => story.id !== id)); }

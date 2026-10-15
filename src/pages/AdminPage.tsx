@@ -713,7 +713,7 @@ export default function AdminPage() {
                 >
                   {BADGES.map((value) => (
                     <option key={value || "none"} value={value}>
-                      {value ? value : "None"}
+                      {value === "live" ? "Live event" : value || "None"}
                     </option>
                   ))}
                 </select>

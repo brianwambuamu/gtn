@@ -1,2 +1,11 @@
 [functions.invite-reporter]
 verify_jwt = true
+
+[functions.manage-push-subscription]
+verify_jwt = false
+
+[functions.send-push-notifications]
+verify_jwt = true
+
+[functions.youtube-live-events]
+verify_jwt = false

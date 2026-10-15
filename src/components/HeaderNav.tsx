@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../store/AuthContext";
+import PushNotifications from "./PushNotifications";
 
 type Props = {
   query: string;
@@ -16,7 +17,7 @@ const navItems: NavItem[] = [
   { label: "Radio", to: "/tv" },
   { label: "TV", to: "/tv" },
   { label: "Podcasts", to: "/tv" },
-  { label: "Live Events", to: "/tv" },
+  { label: "Live Events", to: "/live-events" },
 ];
 
 function SearchIcon() {
@@ -53,6 +54,7 @@ export default function HeaderNav({ query, onQueryChange }: Props) {
         </nav>
 
         <div className="site-header__actions">
+          <PushNotifications />
           <form role="search" onSubmit={submitSearch} className="site-header__search">
             <button type="button" onClick={() => setSearchOpen((open) => !open)} aria-expanded={searchOpen} aria-label={searchOpen ? "Close search" : "Open search"} className="site-header__search-toggle"><SearchIcon /></button>
             <label className="sr-only" htmlFor="site-header-search">Search stories</label>
