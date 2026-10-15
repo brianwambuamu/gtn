@@ -65,7 +65,9 @@ export default function App() {
         <Route path="/admin/*" element={<AdminPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-      <Footer />
+      <div className={location.pathname.startsWith("/admin") ? "site-footer site-footer--workspace" : "site-footer"}>
+        <Footer />
+      </div>
     </>
   );
 }

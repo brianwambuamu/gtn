@@ -67,9 +67,18 @@ export default function AdminPage() {
   const [adVideoName, setAdVideoName] = useState("");
   const [adMediaNote, setAdMediaNote] = useState("");
 
+
   useEffect(() => {
     if (newsCategories.length && !newsCategories.includes(category)) setCategory(newsCategories[0]);
   }, [newsCategories, category]);
+  useEffect(() => {
+    if (!window.matchMedia("(max-width: 600px)").matches) return;
+    const nav = document.querySelector<HTMLElement>(".owner-sidebar__nav");
+    const activeLink = nav?.querySelector<HTMLElement>(".owner-sidebar__link--active");
+    if (!nav || !activeLink) return;
+    const left = activeLink.getBoundingClientRect().left - nav.getBoundingClientRect().left + nav.scrollLeft;
+    nav.scrollTo({ left: left - (nav.clientWidth - activeLink.clientWidth) / 2, behavior: "smooth" });
+  }, [activePage]);
 
   useEffect(() => {
     if (!user || activePage !== "staff" || (user.role !== "super_admin" && !can("manage_staff"))) return;
@@ -398,14 +407,15 @@ export default function AdminPage() {
     <main className="container main owner-admin">
       <aside className="owner-sidebar" aria-label={isSuperAdmin ? "Super Admin navigation" : "Reporter navigation"}>
         <div className="owner-sidebar__identity"><span className="owner-sidebar__eyebrow">GTN WORKSPACE</span><strong>{isSuperAdmin ? "Super Admin" : "Reporter Desk"}</strong><small>{isSuperAdmin ? "Owner controls" : "Your editorial workspace"}</small></div>
-        <nav className="owner-sidebar__nav">
+        <nav className="owner-sidebar__nav" aria-label="Workspace navigation">
+          <span className="owner-sidebar__brand" role="img" aria-label="GTN logo"><img src="/logo.png" alt="" /></span>
           {(isSuperAdmin || can("dashboard_view")) && <NavLink to="/admin/dashboard" end className={({isActive})=>isActive?"owner-sidebar__link owner-sidebar__link--active":"owner-sidebar__link"}><span className="owner-sidebar__icon">⌂</span>Dashboard</NavLink>}
           {(isSuperAdmin || can("publish_stories")) && <NavLink to="/admin/add-story" className={({isActive})=>isActive?"owner-sidebar__link owner-sidebar__link--active":"owner-sidebar__link"}><span className="owner-sidebar__icon">＋</span>Add Story</NavLink>}
           {(isSuperAdmin || can("manage_own_stories") || can("manage_all_stories")) && <NavLink to="/admin/my-stories" className={({isActive})=>isActive?"owner-sidebar__link owner-sidebar__link--active":"owner-sidebar__link"}><span className="owner-sidebar__icon">▤</span>{isSuperAdmin || can("manage_all_stories") ? "Manage Stories" : "My Stories"}</NavLink>}
           {(isSuperAdmin || can("manage_staff")) && <NavLink to="/admin/staff" className={({isActive})=>isActive?"owner-sidebar__link owner-sidebar__link--active":"owner-sidebar__link"}><span className="owner-sidebar__icon">♙</span>Add Staff</NavLink>}
-          {(isSuperAdmin || can("manage_categories")) && <NavLink to="/admin/categories" className={({isActive})=>isActive?"owner-sidebar__link owner-sidebar__link--active":"owner-sidebar__link"}><span className="owner-sidebar__icon">▦</span>News Categories</NavLink>}
+          {(isSuperAdmin || can("manage_categories")) && <NavLink to="/admin/categories" className={({isActive})=>isActive?"owner-sidebar__link owner-sidebar__link--categories owner-sidebar__link--active":"owner-sidebar__link owner-sidebar__link--categories"}><span className="owner-sidebar__icon">▦</span>News Categories</NavLink>}
           {isSuperAdmin && <>
-          <NavLink to="/admin/roles" className={({isActive})=>isActive?"owner-sidebar__link owner-sidebar__link--active":"owner-sidebar__link"}><span className="owner-sidebar__icon">♧</span>Roles &amp; Permissions</NavLink>
+          <NavLink to="/admin/roles" className={({isActive})=>isActive?"owner-sidebar__link owner-sidebar__link--roles owner-sidebar__link--active":"owner-sidebar__link owner-sidebar__link--roles"}><span className="owner-sidebar__icon">♧</span>Roles &amp; Permissions</NavLink>
           <NavLink to="/admin/advertising" className={({isActive})=>isActive?"owner-sidebar__link owner-sidebar__link--active":"owner-sidebar__link"}><span className="owner-sidebar__icon">▣</span>Advertising</NavLink></>}
           {!isSuperAdmin && can("manage_ads") && <NavLink to="/admin/advertising" className={({isActive})=>isActive?"owner-sidebar__link owner-sidebar__link--active":"owner-sidebar__link"}><span className="owner-sidebar__icon">▣</span>Advertising</NavLink>}
         </nav>
@@ -413,18 +423,20 @@ export default function AdminPage() {
       </aside>
       <div className="owner-content">
       <div className="owner-page-heading"><div><span className="owner-sidebar__eyebrow">{isSuperAdmin ? "CONTROL CENTER" : "EDITORIAL WORKSPACE"}</span><h1>{isSuperAdmin ? ({dashboard:"Dashboard", "add-story":"Add Story", "my-stories":"Manage Stories",staff:"Add Staff",categories:"News Categories",roles:"Roles & Permissions",advertising:"Advertising"} as Record<string,string>)[activePage] || "Dashboard" : ({dashboard:"Reporter Dashboard", "add-story":"Add Story", "my-stories":"My Stories",categories:"News Categories",staff:"Add Staff",advertising:"Advertising"} as Record<string,string>)[activePage] || "Reporter Dashboard"}</h1><p>{isSuperAdmin ? "Manage publishing, staff access, categories, and advertising." : "Publish stories and manage your own reporting."}</p></div><span className="owner-page-heading__badge">{isSuperAdmin ? "OWNER" : "REPORTER"}</span></div>
-      {(activePage === "dashboard" && (isSuperAdmin || can("dashboard_view"))) && <section id="admin-dashboard" className="owner-section">
-      <div className="cat-head cat-head--split">
-        <div>
-          <h1>Editorial Desk</h1>
-          <span>Signed in as {user.display_name} · {isSuperAdmin ? "Super admin" : "Reporter"}</span>
+      {(activePage === "dashboard" && (isSuperAdmin || can("dashboard_view"))) && <section id="admin-dashboard" className="owner-section owner-dashboard">
+      <header className="owner-dashboard__welcome">
+        <div className="owner-dashboard__welcome-copy">
+          <span className="owner-dashboard__eyebrow">{isSuperAdmin ? "SUPER ADMIN WORKSPACE" : "REPORTER WORKSPACE"}</span>
+          <h2>Welcome back, {user.display_name}</h2>
+          <p>Your newsroom activity and publishing overview.</p>
         </div>
-        <button className="auth__signout" type="button" onClick={signOut}>
-          Sign Out
-        </button>
-      </div>
+        <div className="owner-dashboard__welcome-actions">
+          {(isSuperAdmin || can("publish_stories")) && <Link className="owner-dashboard__add" to="/admin/add-story"><span aria-hidden="true">＋</span> Add story</Link>}
+          <button className="owner-dashboard__signout" type="button" onClick={signOut}>Sign Out</button>
+        </div>
+      </header>
 
-      <div className="chips">
+      {(isSuperAdmin || can("manage_categories")) && <div className="chips">
         {newsCategories.map((cat) => {
           const count = stories.filter(
             (story) => story.category === cat,
@@ -441,18 +453,20 @@ export default function AdminPage() {
             </Link>
           );
         })}
-      </div>
+      </div>}
 
-      <div className="stats">
-        <div className="stats__item">
-          <b>{stories.length}</b>
+      <div className="owner-dashboard__section-title"><div><span className="owner-section__eyebrow">OVERVIEW</span><h2>At a glance</h2></div><span className="owner-dashboard__live"><i /> Live data</span></div>
+      <div className="stats owner-dashboard__stats">
+        <div className="stats__item owner-dashboard__stat owner-dashboard__stat--stories">
+          <span className="owner-dashboard__stat-icon" aria-hidden="true">▤</span><b>{stories.length}</b>
           <span>Total stories</span>
         </div>
-        <div className="stats__item">
-          <b>{isSuperAdmin ? customStories.length : myStories.length}</b>
+        <div className="stats__item owner-dashboard__stat owner-dashboard__stat--published">
+          <span className="owner-dashboard__stat-icon" aria-hidden="true">↗</span><b>{isSuperAdmin ? customStories.length : myStories.length}</b>
           <span>Published by you</span>
         </div>
-        {isSuperAdmin && <div className="stats__item"><b>{ads.length}</b><span>Live ads</span></div>}
+        {(isSuperAdmin || can("manage_categories")) && <Link className="stats__item stats__item--link owner-dashboard__stat owner-dashboard__stat--categories" to="/admin/categories"><span className="owner-dashboard__stat-icon" aria-hidden="true">▦</span><b>{newsCategories.length}</b><span>News categories</span></Link>}
+        {(isSuperAdmin || can("manage_ads")) && <Link className="stats__item stats__item--link owner-dashboard__stat owner-dashboard__stat--ads" to="/admin/advertising"><span className="owner-dashboard__stat-icon" aria-hidden="true">▣</span><b>{ads.length}</b><span>Live ads</span></Link>}
       </div>
       {isSuperAdmin && <div className="owner-published-content">
         <section className="owner-published-card"><header><div><span className="owner-section__eyebrow">EDITORIAL</span><h2>Stories Published</h2></div><strong>{stories.length}</strong></header><ul className="owner-published-card__list owner-published-card__list--scroll">{stories.map((story)=><li key={story.id}><Link to={`/story/${story.id}`}>{story.title}</Link><span>{story.category}</span></li>)}</ul>{stories.length===0&&<p className="admin__note">No published stories yet.</p>}</section>

@@ -3,7 +3,7 @@ const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env
 export const backendConfigured = Boolean(url && anonKey);
 
 type Session = { access_token: string; refresh_token?: string; user: { id: string; email?: string } };
-const SESSION_KEY = "gtn.supabase-session";
+export const SESSION_KEY = "gtn.supabase-session";
 
 export function getSession(): Session | null {
   try { return JSON.parse(localStorage.getItem(SESSION_KEY) || "null") as Session | null; } catch { return null; }
