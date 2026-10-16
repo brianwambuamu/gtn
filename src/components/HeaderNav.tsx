@@ -14,9 +14,8 @@ type NavItem = { label: string; to: string };
 const navItems: NavItem[] = [
   { label: "For You", to: "/" },
   { label: "News", to: "/news" },
-  { label: "Radio", to: "/tv" },
   { label: "TV", to: "/tv" },
-  { label: "Podcasts", to: "/tv" },
+  { label: "Podcasts", to: "/podcasts" },
   { label: "Live Events", to: "/live-events" },
 ];
 

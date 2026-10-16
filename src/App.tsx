@@ -9,6 +9,7 @@ import AdminPage from "./pages/AdminPage";
 import CategoryPage from "./pages/CategoryPage";
 import ForYouPage from "./pages/ForYouPage";
 import LiveEventsPage from "./pages/LiveEventsPage";
+import PodcastsPage from "./pages/PodcastsPage";
 import NewsPage from "./pages/NewsPage";
 import StoryPage from "./pages/StoryPage";
 import TvPage from "./pages/TvPage";
@@ -58,7 +59,7 @@ export default function App() {
         <Route path="/news" element={<NewsPage />} />
         <Route path="/tv" element={<TvPage />} />
         <Route path="/radio" element={<Navigate to="/tv" replace />} />
-        <Route path="/podcasts" element={<Navigate to="/tv" replace />} />
+        <Route path="/podcasts" element={<PodcastsPage />} />
         <Route path="/live-events" element={<LiveEventsPage />} />
         <Route path="/live-events/:videoId" element={<LiveEventsPage />} />
         <Route path="/category/:slug" element={<CategoryPage />} />
