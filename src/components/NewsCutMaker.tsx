@@ -188,7 +188,7 @@ export default function NewsCutMaker({ stories, isSuperAdmin }: { stories: Story
   }
 
   return <section className="news-cut" aria-label="News cut maker">
-    <header className="news-cut__hero"><div className="news-cut__hero-brand"><span className="news-cut__hero-icon">▧</span><span>GTN CREATIVE STUDIO</span></div><div className="news-cut__hero-copy"><div><span className="news-cut__eyebrow">SOCIAL PUBLISHING</span><h2>Create a News Cut</h2><p>Build a polished, on-brand story graphic for your social channels.</p></div><span className="news-cut__format">PORTRAIT · 4:5</span></div></header>
+    <header className="news-cut__hero"><div className="news-cut__hero-brand"><span className="news-cut__hero-icon"><img src="/logo.png" alt="GTN" /></span><span>GTN CREATIVE STUDIO</span></div><div className="news-cut__hero-copy"><div><span className="news-cut__eyebrow">SOCIAL PUBLISHING</span><h2>Create a News Cut</h2><p>Build a polished, on-brand story graphic for your social channels.</p></div><span className="news-cut__format">PORTRAIT · 4:5</span></div></header>
     <div className="news-cut__layout">
       <div className="news-cut__editor">
         <div className="news-cut__section-head"><span className="news-cut__step">01</span><div><h3>Story details</h3><p>Start with a published story or create a graphic from scratch.</p></div></div>
