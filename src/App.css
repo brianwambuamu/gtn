@@ -2921,6 +2921,34 @@
   .site-header__brand-name { font-size: 11px; }
 }
 
+@media (max-width: 600px) {
+  .site-header__actions { justify-content: flex-end; gap: 8px; }
+  .site-header__push, .site-header__search {
+    flex: 0 0 38px;
+    width: 38px;
+    height: 38px;
+    min-height: 38px;
+    justify-content: center;
+    padding: 0;
+  }
+  .push-alerts__label { display: none; }
+  .site-header__account {
+    width: auto;
+    max-width: 88px;
+    min-width: 0;
+    min-height: 38px;
+    overflow: hidden;
+    padding: 0 10px;
+    font-size: 10px;
+    text-overflow: ellipsis;
+  }
+}
+@media (max-width: 380px) {
+  .site-header__actions { gap: 6px; }
+  .site-header__push, .site-header__search { flex-basis: 35px; width: 35px; height: 35px; min-height: 35px; }
+  .site-header__account { max-width: 76px; min-height: 35px; padding: 0 8px; font-size: 9px; }
+}
+
 .site-header__link:has(.site-header__live-dot) { gap: 7px; }
 .site-header__live-dot {
   position: relative;
