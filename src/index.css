@@ -20,6 +20,18 @@
   --font: "Jost", system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
+/* GTN newsroom visual foundation */
+:root {
+  --ink: #142238;
+  --black: #142238;
+  --gray-700: #42536a;
+  --muted: #718096;
+  --line: #e3e9f1;
+  --surface: #f4f7fb;
+  --white: #ffffff;
+  --radius: 14px;
+}
+
 *,
 *::before,
 *::after {
@@ -35,10 +47,13 @@ body {
   margin: 0;
   font-family: var(--font);
   color: var(--ink);
-  background: var(--white);
+  background: #f6f8fb;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
+
+button, input, select, textarea { font-family: inherit; }
+button { -webkit-tap-highlight-color: transparent; }
 
 ::selection {
   background: var(--orange);
@@ -193,8 +208,9 @@ input {
 /* ---------- breaking ticker ---------- */
 
 .ticker {
-  background: var(--white);
+  background: #fff;
   border-bottom: 1px solid var(--line);
+  box-shadow: 0 4px 16px rgba(20, 34, 56, .035);
 }
 
 .ticker__inner {
@@ -206,14 +222,14 @@ input {
 
 .ticker__badge {
   flex: none;
-  background: var(--red);
+  background: var(--orange);
   color: var(--white);
   font-size: 11.5px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.12em;
   padding: 6px 11px;
-  border-radius: 3px;
+  border-radius: 6px;
 }
 
 .ticker__viewport {
@@ -252,7 +268,8 @@ input {
   display: inline-flex;
   align-items: center;
   gap: 14px;
-  font-size: 15px;
+  color: #24364d;
+  font-size: 14px;
   font-weight: 500;
 }
 
@@ -416,8 +433,8 @@ input {
 /* ---------- footer ---------- */
 
 .footer {
-  background: var(--black);
-  color: #b8b8b8;
+  background: #0a0a0a;
+  color: #c4cedb;
 }
 
 .footer__grid {
@@ -429,9 +446,15 @@ input {
 }
 
 .footer__logo {
-  height: 64px;
-  width: auto;
-  margin-bottom: 16px;
+  width: 72px;
+  height: 72px;
+  margin-bottom: 18px;
+  border: 1px solid rgba(255,255,255,.72);
+  border-radius: 14px;
+  background: #fff;
+  padding: 5px;
+  object-fit: contain;
+  box-shadow: 0 8px 22px rgba(0,0,0,.18);
 }
 
 .footer__brand p {
@@ -456,7 +479,7 @@ input {
   color: var(--black);
   background: var(--orange);
   padding: 7px 12px;
-  border-radius: 3px;
+  border-radius: 999px;
   transition: background 0.15s ease;
 }
 
@@ -471,7 +494,7 @@ input {
   text-transform: uppercase;
   letter-spacing: -0.01em;
   border-bottom: 1px solid rgba(255, 255, 255, 0.18);
-  padding-bottom: 10px;
+  padding-bottom: 12px;
   margin-bottom: 16px;
 }
 

@@ -54,7 +54,7 @@ export default function LiveEventsPage() {
 
   return <main className="live-events-page">
     <div className="live-events-page__container">
-      <div className="live-events-page__breadcrumb"><Link to="/">Home</Link><span aria-hidden="true">›</span><span>Live Events</span></div>
+      <div className="live-events-page__breadcrumb"><Link to="/">Home</Link><span aria-hidden="true">›</span><span>GTN Live</span></div>
       <header className="live-events-page__heading"><div><span className="live-events-page__eyebrow">GTN LIVE</span><h1>{activeEvent ? "Watch Live" : "Live Events"}</h1></div>{!activeEvent && !loading && events.length > 0 && <span className="live-events-page__count">{events.length} live {events.length === 1 ? "event" : "events"}</span>}</header>
 
       {activeEvent ? <section className="live-events-player" aria-label="Live event player">

@@ -16,7 +16,7 @@ const navItems: NavItem[] = [
   { label: "News", to: "/news" },
   { label: "TV", to: "/tv" },
   { label: "Podcasts", to: "/podcasts" },
-  { label: "Live Events", to: "/live-events" },
+  { label: "GTN Live", to: "/live-events" },
 ];
 
 function SearchIcon() {
@@ -42,13 +42,16 @@ export default function HeaderNav({ query, onQueryChange }: Props) {
     <div className="site-header__surface">
       <div className="site-header__inner">
         <Link to="/" aria-label="GTN News home" className="site-header__brand">
-          <span className="site-header__brand-mark"><img src="/logo.png" alt="" /></span>
+          <span className="site-header__brand-mark"><img src="/logo.png" alt="GTN" /></span>
           <span className="site-header__brand-name">GTN <b>News</b></span>
         </Link>
 
         <nav aria-label="Primary" className="site-header__nav">
           <ul>{navItems.map((item) => <li key={item.label}>
-            <NavLink to={item.to} end={item.to === "/"} className={({ isActive }) => `site-header__link${isActive && (item.to !== "/tv" || item.label === "TV") ? " is-active" : ""}`}>{item.label}</NavLink>
+            <NavLink to={item.to} end={item.to === "/"} className={({ isActive }) => `site-header__link${isActive && (item.to !== "/tv" || item.label === "TV") ? " is-active" : ""}`}>
+              {item.label === "GTN Live" && <span className="site-header__live-dot" aria-hidden="true" />}
+              {item.label}
+            </NavLink>
           </li>)}</ul>
         </nav>
 
