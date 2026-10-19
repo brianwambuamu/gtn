@@ -9,6 +9,15 @@ import { useAuth } from "./AuthContext";
 
 export type NewStoryInput = { title: string; excerpt?: string; body?: string; category: string; author?: string; badge?: Badge; media?: StoryMedia | StoryMedia[]; placement?: Placement; is_trending?: boolean; is_breaking?: boolean };
 type DbStory = Omit<Story, "time"> & { time?: string; reporter_id?: string; created_at?: string };
+const NEWS_CACHE_KEY = "gtn.published-stories.v1";
+const STORY_LIST_SELECT = "id,title,excerpt,category,author,badge,media,placement,is_trending,is_breaking,seed,reporter_id,created_at";
+
+function readCachedStories(): Story[] {
+  try {
+    const cached = localStorage.getItem(NEWS_CACHE_KEY);
+    return cached ? (JSON.parse(cached) as Story[]) : [];
+  } catch { return []; }
+}
 
 function formatPublishedAt(value?: string): string {
   if (!value) return "Just now";
@@ -30,22 +39,26 @@ const NewsContext = createContext<NewsContextValue | null>(null);
 
 export function NewsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const [customStories, setCustomStories] = useState<Story[]>([]);
+  const [customStories, setCustomStories] = useState<Story[]>(readCachedStories);
   const [deletedIds] = useState<string[]>([]);
-  const [loading, setLoading] = useState(backendConfigured);
+  const [loading, setLoading] = useState(backendConfigured && readCachedStories().length === 0);
   useEffect(() => {
     if (!backendConfigured) return;
     let active = true;
-    backend.rows<DbStory>("stories", "select=*&status=eq.published&order=created_at.desc").then((rows) => {
+    // The feed does not need full article bodies. Load those only on the article route.
+    backend.rows<DbStory>("stories", `select=${STORY_LIST_SELECT}&status=eq.published&order=created_at.desc`).then((rows) => {
       if (active) setCustomStories(rows.map(normalizeStory));
     }).catch((error) => console.error("Unable to load stories from Supabase", error)).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [user]);
+  }, []);
+  useEffect(() => {
+    try { localStorage.setItem(NEWS_CACHE_KEY, JSON.stringify(customStories)); } catch { /* Cache is optional when storage is full or unavailable. */ }
+  }, [customStories]);
   const stories = useMemo(() => customStories.filter((story) => !deletedIds.includes(story.id)), [customStories, deletedIds]);
   const newsStories = useMemo(() => stories.filter((story) => story.placement !== "for-you"), [stories]);
   async function refreshStories() {
     if (!backendConfigured) return;
-    const rows = await backend.rows<DbStory>("stories", "select=*&status=eq.published&order=created_at.desc");
+    const rows = await backend.rows<DbStory>("stories", `select=${STORY_LIST_SELECT}&status=eq.published&order=created_at.desc`);
     setCustomStories(rows.map(normalizeStory));
   }
   async function addStory(input: NewStoryInput) {

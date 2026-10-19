@@ -1,7 +1,9 @@
 import { Link } from "react-router-dom";
-import { thumbUrl, videos, watchUrl } from "../data/videos";
+import { thumbUrl, watchUrl } from "../data/videos";
+import { useLatestVideos } from "../hooks/useLatestVideos";
 
 export default function VideoStrip() {
+  const { videos, loading } = useLatestVideos();
   const items = videos.slice(0, 4);
 
   return (
@@ -22,7 +24,7 @@ export default function VideoStrip() {
           </svg>
         </Link>
       </div>
-      <div className="vstrip__grid">
+      {loading && !items.length ? <p className="empty">Loading latest GTN videos…</p> : !items.length ? <p className="empty">No recent videos are available right now.</p> : <div className="vstrip__grid">
         {items.map((video) => (
           <a
             className="vstrip__card"
@@ -41,7 +43,7 @@ export default function VideoStrip() {
             </span>
           </a>
         ))}
-      </div>
+      </div>}
     </section>
   );
 }

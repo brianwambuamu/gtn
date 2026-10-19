@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import { Link, Navigate, NavLink, useLocation, useNavigate } from "react-router-dom";
 import AuthPanel from "../components/AuthPanel";
+import NewsCutMaker from "../components/NewsCutMaker";
 import { slugify, slugToLabel } from "../data/categories";
 import { mediaError, storyMediaItems, VIDEO_ACCEPT, VIDEO_MAX_MB } from "../data/media";
 import type { StoryMedia } from "../data/media";
@@ -131,7 +132,7 @@ export default function AdminPage() {
   const isSuperAdmin = user.role === "super_admin";
   if (!isSuperAdmin && permissionsLoading) return <main className="container main"><p className="empty">Loading reporter permissions…</p></main>;
   if (activePage === "stories") return <Navigate to="/admin/add-story" replace />;
-  if (isSuperAdmin && !["dashboard", "add-story", "my-stories", "staff", "roles", "categories", "advertising", "profile"].includes(activePage)) {
+  if (isSuperAdmin && !["dashboard", "add-story", "my-stories", "staff", "roles", "categories", "advertising", "profile", "news-cut"].includes(activePage)) {
     return <Navigate to="/admin/dashboard" replace />;
   }
   const reporterPages = [
@@ -141,6 +142,7 @@ export default function AdminPage() {
     ...(can("manage_categories") ? ["categories"] : []),
     ...(can("manage_staff") ? ["staff"] : []),
     ...(can("manage_ads") ? ["advertising"] : []),
+    ...(can("manage_news_cuts") ? ["news-cut"] : []),
     "profile",
   ];
   if (!isSuperAdmin && !reporterPages.includes(activePage)) {
@@ -294,8 +296,13 @@ export default function AdminPage() {
     void deleteStory(id).then(() => setFlash("Story removed from the site.")).catch((cause) => setFlash(cause instanceof Error ? cause.message : "Could not remove story."));
   }
 
-  function editStory(story: (typeof stories)[number]) {
-    setEditingId(story.id); setTitle(story.title); setExcerpt(story.excerpt || ""); setBody(story.body || ""); setCategory(story.category); setAuthor(story.author || ""); setBadge(story.badge || ""); setMediaKind("none"); setMediaUrl(""); setMediaAssets(storyMediaItems(story.media)); setIsTrending(Boolean(story.is_trending)); setIsBreaking(Boolean(story.is_breaking)); setPlacement(story.placement || "");
+  async function editStory(story: (typeof stories)[number]) {
+    let storyBody = story.body || "";
+    if (!storyBody) {
+      try { storyBody = (await backend.rows<{ body?: string }>("stories", `select=body&id=eq.${encodeURIComponent(story.id)}&limit=1`))[0]?.body || ""; }
+      catch (cause) { setFlash(cause instanceof Error ? `Could not load full story: ${cause.message}` : "Could not load full story."); return; }
+    }
+    setEditingId(story.id); setTitle(story.title); setExcerpt(story.excerpt || ""); setBody(storyBody); setCategory(story.category); setAuthor(story.author || ""); setBadge(story.badge || ""); setMediaKind("none"); setMediaUrl(""); setMediaAssets(storyMediaItems(story.media)); setIsTrending(Boolean(story.is_trending)); setIsBreaking(Boolean(story.is_breaking)); setPlacement(story.placement || "");
     navigate("/admin/add-story");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -540,6 +547,7 @@ export default function AdminPage() {
           {(isSuperAdmin || can("manage_own_stories") || can("manage_all_stories")) && <NavLink to="/admin/my-stories" className={({isActive})=>isActive?"owner-sidebar__link owner-sidebar__link--active":"owner-sidebar__link"}><span className="owner-sidebar__icon">▤</span>{isSuperAdmin || can("manage_all_stories") ? "Manage Stories" : "My Stories"}</NavLink>}
           {(isSuperAdmin || can("manage_staff")) && <NavLink to="/admin/staff" className={({isActive})=>isActive?"owner-sidebar__link owner-sidebar__link--active":"owner-sidebar__link"}><span className="owner-sidebar__icon">♙</span>Add Staff</NavLink>}
           {(isSuperAdmin || can("manage_categories")) && <NavLink to="/admin/categories" className={({isActive})=>isActive?"owner-sidebar__link owner-sidebar__link--categories owner-sidebar__link--active":"owner-sidebar__link owner-sidebar__link--categories"}><span className="owner-sidebar__icon">▦</span>News Categories</NavLink>}
+          {(isSuperAdmin || can("manage_news_cuts")) && <NavLink to="/admin/news-cut" className={({isActive})=>isActive?"owner-sidebar__link owner-sidebar__link--active":"owner-sidebar__link"}><span className="owner-sidebar__icon">▧</span>News Cut</NavLink>}
           {isSuperAdmin && <>
           <NavLink to="/admin/roles" className={({isActive})=>isActive?"owner-sidebar__link owner-sidebar__link--roles owner-sidebar__link--active":"owner-sidebar__link owner-sidebar__link--roles"}><span className="owner-sidebar__icon">♧</span>Roles &amp; Permissions</NavLink>
           <NavLink to="/admin/advertising" className={({isActive})=>isActive?"owner-sidebar__link owner-sidebar__link--active":"owner-sidebar__link"}><span className="owner-sidebar__icon">▣</span>Advertising</NavLink></>}
@@ -549,7 +557,8 @@ export default function AdminPage() {
         <div className="owner-sidebar__footer"><span className="owner-sidebar__status" /> {isSuperAdmin ? "Owner access enabled" : "Reporter access enabled"}</div>
       </aside>
       <div className="owner-content">
-      <div className="owner-page-heading"><div><span className="owner-sidebar__eyebrow">{isSuperAdmin ? "CONTROL CENTER" : "EDITORIAL WORKSPACE"}</span><h1>{activePage === "profile" ? "My Profile" : isSuperAdmin ? ({dashboard:"Dashboard", "add-story":"Add Story", "my-stories":"Manage Stories",staff:"Add Staff",categories:"News Categories",roles:"Roles & Permissions",advertising:"Advertising"} as Record<string,string>)[activePage] || "Dashboard" : ({dashboard:"Reporter Dashboard", "add-story":"Add Story", "my-stories":"My Stories",categories:"News Categories",staff:"Add Staff",advertising:"Advertising"} as Record<string,string>)[activePage] || "Reporter Dashboard"}</h1><p>{activePage === "profile" ? "Review your staff account details and update your sign-in credentials." : isSuperAdmin ? "Manage publishing, staff access, categories, and advertising." : "Publish stories and manage your own reporting."}</p></div><span className="owner-page-heading__badge">{isSuperAdmin ? "OWNER" : "REPORTER"}</span></div>
+      <div className="owner-page-heading"><div><span className="owner-sidebar__eyebrow">{isSuperAdmin ? "CONTROL CENTER" : "EDITORIAL WORKSPACE"}</span><h1>{activePage === "profile" ? "My Profile" : isSuperAdmin ? ({dashboard:"Dashboard", "add-story":"Add Story", "my-stories":"Manage Stories",staff:"Add Staff",categories:"News Categories",roles:"Roles & Permissions",advertising:"Advertising", "news-cut":"News Cut"} as Record<string,string>)[activePage] || "Dashboard" : ({dashboard:"Reporter Dashboard", "add-story":"Add Story", "my-stories":"My Stories",categories:"News Categories",staff:"Add Staff",advertising:"Advertising", "news-cut":"News Cut"} as Record<string,string>)[activePage] || "Reporter Dashboard"}</h1><p>{activePage === "profile" ? "Review your staff account details and update your sign-in credentials." : activePage === "news-cut" ? "Create and download a branded story graphic, whether the story is published or still being prepared." : isSuperAdmin ? "Manage publishing, staff access, categories, and advertising." : "Publish stories and manage your own reporting."}</p></div><span className="owner-page-heading__badge">{isSuperAdmin ? "OWNER" : "REPORTER"}</span></div>
+      {activePage === "news-cut" && <NewsCutMaker stories={stories} isSuperAdmin={isSuperAdmin} />}
       {(activePage === "dashboard" && (isSuperAdmin || can("dashboard_view"))) && <section id="admin-dashboard" className="owner-section owner-dashboard">
       <header className="owner-dashboard__welcome">
         <div className="owner-dashboard__welcome-copy">
@@ -594,6 +603,7 @@ export default function AdminPage() {
         </div>
         {(isSuperAdmin || can("manage_categories")) && <Link className="stats__item stats__item--link owner-dashboard__stat owner-dashboard__stat--categories" to="/admin/categories"><span className="owner-dashboard__stat-icon" aria-hidden="true">▦</span><b>{newsCategories.length}</b><span>News categories</span></Link>}
         {(isSuperAdmin || can("manage_ads")) && <Link className="stats__item stats__item--link owner-dashboard__stat owner-dashboard__stat--ads" to="/admin/advertising"><span className="owner-dashboard__stat-icon" aria-hidden="true">▣</span><b>{ads.length}</b><span>Live ads</span></Link>}
+        {(isSuperAdmin || can("manage_news_cuts")) && <Link className="stats__item stats__item--link owner-dashboard__stat owner-dashboard__stat--news-cut" to="/admin/news-cut"><span className="owner-dashboard__stat-icon" aria-hidden="true">▧</span><b>Open</b><span>News Cut studio</span></Link>}
       </div>
       {isSuperAdmin && <div className="owner-published-content">
         <section className="owner-published-card"><header><div><span className="owner-section__eyebrow">EDITORIAL</span><h2>Stories Published</h2></div><strong>{stories.length}</strong></header><ul className="owner-published-card__list owner-published-card__list--scroll">{stories.map((story)=><li key={story.id}><Link to={`/story/${story.id}`}>{story.title}</Link><span>{story.category}</span></li>)}</ul>{stories.length===0&&<p className="admin__note">No published stories yet.</p>}</section>

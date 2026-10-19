@@ -12,6 +12,7 @@ export const PERMISSION_LABELS = {
   manage_categories: "Add, edit, and delete news categories",
   manage_ads: "Manage advertising",
   manage_staff: "Invite, deactivate, and delete reporters",
+  manage_news_cuts: "Create and download News Cut graphics",
 } as const;
 export type PermissionKey = keyof typeof PERMISSION_LABELS;
 export type ReporterPermissions = Record<PermissionKey, boolean>;
@@ -23,6 +24,7 @@ export const DEFAULT_REPORTER_PERMISSIONS: ReporterPermissions = {
   manage_categories: false,
   manage_ads: false,
   manage_staff: false,
+  manage_news_cuts: false,
 };
 type PermissionsValue = { permissions: ReporterPermissions; loading: boolean; can: (permission: PermissionKey) => boolean; save: (next: ReporterPermissions) => Promise<void> };
 const Context = createContext<PermissionsValue | null>(null);

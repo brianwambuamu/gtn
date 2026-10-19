@@ -2,18 +2,19 @@ import {
   channelUrl,
   embedUrl,
   thumbUrl,
-  videos,
   watchUrl,
 } from "../data/videos";
+import { useLatestVideos } from "../hooks/useLatestVideos";
 
 export default function VideoListMini() {
+  const { videos, loading } = useLatestVideos();
   const current = videos[0];
   const more = videos.slice(1, 4);
 
   return (
     <section className="vslice">
       <h2 className="section__title">Latest Videos</h2>
-      <div className="vslice__player">
+      {loading && !current ? <p className="empty">Loading latest GTN videos…</p> : !current ? <p className="empty">No recent videos are available right now.</p> : <><div className="vslice__player">
         <iframe
           src={embedUrl(current.id)}
           title={current.title}
@@ -58,6 +59,7 @@ export default function VideoListMini() {
       >
         Subscribe on YouTube
       </a>
+      </>}
     </section>
   );
 }

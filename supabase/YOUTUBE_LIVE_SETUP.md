@@ -17,3 +17,13 @@ The public `/live-events` page checks GTN's `@gusiitelevisionnetwork` YouTube ch
    ```
 
 The function resolves the channel ID from GTN's existing YouTube handle, so no channel ID needs to be copied into the app. If no broadcast is active, the page displays **No live events right now**. Embedding depends on the stream's YouTube settings; streams that do not permit embedding are excluded so the Watch Live action can stay on the GTN site.
+
+## Latest GTN TV uploads
+
+The TV page and the Latest Videos sections use the channel's uploads playlist, which YouTube returns in newest-first order. They share a browser cache for 15 minutes, and the Edge Function keeps an in-memory cache for the same period.
+
+Deploy the function after the `YOUTUBE_API_KEY` secret is set:
+
+```sh
+supabase functions deploy youtube-latest-videos --no-verify-jwt
+```

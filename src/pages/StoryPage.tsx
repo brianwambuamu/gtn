@@ -1,4 +1,5 @@
 import { Link, Navigate, useParams } from "react-router-dom";
+import { useEffect, useState } from "react";
 import Section from "../components/Section";
 import StoryCard from "../components/StoryCard";
 import StoryImage from "../components/StoryImage";
@@ -9,6 +10,7 @@ import type { Story } from "../data/news";
 import { tiktokEmbedUrl, youtubeEmbedUrl } from "../data/media";
 import { useVideoUrl } from "../lib/videoStorage";
 import { useNews } from "../store/NewsContext";
+import { backend, backendConfigured } from "../lib/backend";
 
 function StoryMediaBlock({ media, story }: { media: StoryMedia; story: Story }) {
   const src = useVideoUrl(media.type === "video" ? media.url : "");
@@ -23,11 +25,21 @@ export default function StoryPage() {
   const { id = "" } = useParams();
   const { getStory, categoryStories } = useNews();
   const story = getStory(id);
+  const [fullBody, setFullBody] = useState("");
+  useEffect(() => {
+    let active = true;
+    setFullBody("");
+    if (!story || story.body || !backendConfigured) return () => { active = false; };
+    void backend.rows<{ body?: string }>("stories", `select=body&id=eq.${encodeURIComponent(story.id)}&status=eq.published&limit=1`)
+      .then((rows) => { if (active) setFullBody(rows[0]?.body || ""); })
+      .catch((error) => console.error("Unable to load article text", error));
+    return () => { active = false; };
+  }, [story?.id, story?.body]);
   if (!story) return <Navigate to="/news" replace />;
 
   const related = categoryStories(slugify(story.category)).filter((item) => item.id !== story.id).slice(0, 3);
   const mediaItems = storyMediaItems(story.media);
-  const articleParagraphs = (story.body || story.excerpt || "").split(/\n\s*\n/).map((paragraph) => paragraph.trim()).filter(Boolean);
+  const articleParagraphs = (story.body || fullBody || story.excerpt || "").split(/\n\s*\n/).map((paragraph) => paragraph.trim()).filter(Boolean);
 
   return (
     <main className="container main">
