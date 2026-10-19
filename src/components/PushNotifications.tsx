@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import { backend, backendConfigured } from "../lib/backend";
 
-const publicKey = import.meta.env.VITE_WEB_PUSH_PUBLIC_KEY as string | undefined;
+// VAPID public keys are designed to be shipped to browsers. Keep the deployment
+// default in sync with WEB_PUSH_PUBLIC_KEY in Supabase; a build env value overrides it.
+const publicKey = (import.meta.env.VITE_WEB_PUSH_PUBLIC_KEY as string | undefined) ||
+  "BKqUrBmmpDs6msXzYd6NVa7wA9IKVAwLoEB79v1Dj0vkLwvF-vSG6BKwRCCGTmB0PGSYCl2D3dRKKUTa5xYXpbU";
 const permissionPromptKey = "gtn-notification-permission-requested-v2";
 
 function applicationServerKey(value: string): ArrayBuffer {
