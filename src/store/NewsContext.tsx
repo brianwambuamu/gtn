@@ -67,9 +67,14 @@ export function NewsProvider({ children }: { children: ReactNode }) {
     const rows = await backend.insert<DbStory>("stories", { id: draft.id, title: draft.title, excerpt: draft.excerpt, body: draft.body, category: draft.category, author: draft.author, badge: draft.badge, media: draft.media, placement: draft.placement, is_trending: draft.is_trending, is_breaking: draft.is_breaking, seed: draft.seed, reporter_id: getSession()?.user.id, status: "published" });
     const saved = rows[0] ? normalizeStory(rows[0]) : draft;
     setCustomStories((prev) => [saved, ...prev]);
-    // Notification delivery is best effort: never make a successful publish look failed.
-    void backend.invoke("send-push-notifications", { story_id: saved.id }).catch((error) => {
+    // Publishing succeeds independently; report push outcome in the newsroom UI.
+    void backend.invoke<{ sent: boolean; reason?: string; subscriptions?: number; delivered?: number; failed?: number }>("send-push-notifications", { story_id: saved.id }).then((result) => {
+      window.dispatchEvent(new CustomEvent("gtn:push-delivery", { detail: result }));
+    }).catch((error) => {
       console.warn("Story published, but push notifications could not be sent.", error);
+      window.dispatchEvent(new CustomEvent("gtn:push-delivery", {
+        detail: { sent: false, error: error instanceof Error ? error.message : "Unknown push error" },
+      }));
     });
     return saved;
   }

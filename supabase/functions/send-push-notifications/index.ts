@@ -36,32 +36,55 @@ Deno.serve(async (request) => {
       savedSubscriptions.push(...(page || []));
       if (!page || page.length < 1000) break;
     }
+    if (savedSubscriptions.length === 0) {
+      return json({ sent: false, reason: "no_subscriptions", subscriptions: 0, delivered: 0, failed: 0 }, 200, origin);
+    }
+
+    const privateKey = Deno.env.get("WEB_PUSH_PRIVATE_KEY");
+    const publicKey = Deno.env.get("WEB_PUSH_PUBLIC_KEY");
+    const subject = Deno.env.get("WEB_PUSH_SUBJECT") || Deno.env.get("SUPABASE_URL");
+    if (!privateKey || !publicKey || !subject) {
+      return json({ error: "Push delivery is not configured. Set WEB_PUSH_PUBLIC_KEY, WEB_PUSH_PRIVATE_KEY, and WEB_PUSH_SUBJECT in Supabase secrets." }, 503, origin);
+    }
+
     let deliveredCount = 0;
-    if (savedSubscriptions?.length) {
-      const privateKey = Deno.env.get("WEB_PUSH_PRIVATE_KEY");
-      const publicKey = Deno.env.get("WEB_PUSH_PUBLIC_KEY");
-      const subject = Deno.env.get("WEB_PUSH_SUBJECT") || Deno.env.get("SUPABASE_URL");
-      if (!privateKey || !publicKey || !subject) return json({ error: "Push delivery is not configured" }, 503, origin);
-      const isLive = story.badge === "live";
-      const summary = `${story.title}${story.excerpt ? ` — ${story.excerpt}` : ""}`.trim().slice(0, 240);
-      const payload = {
-        title: isLive ? "GTN Live Event" : story.is_breaking ? "Breaking News" : "GTN News",
-        body: summary,
-        url: `/story/${encodeURIComponent(story.id)}`,
-        tag: `gtn-story-${story.id}`,
-        icon: "/logo.png",
-        badge: "/logo.png",
-        category: story.category,
-      };
-      const result = await sendPushBatch(savedSubscriptions.map((row) => row.subscription), payload, { publicKey, privateKey, subject });
-      deliveredCount = result.delivered;
-      const expiredEndpoints = result.gone.map((subscription) => subscription.endpoint);
-      if (expiredEndpoints.length) await admin.from("push_subscriptions").delete().in("endpoint", expiredEndpoints);
-      if (result.failed.length > 0) console.warn(`Push delivery had ${result.failed.length} unsuccessful subscription(s).`);
+    const isLive = story.badge === "live";
+    const summary = `${story.title}${story.excerpt ? ` — ${story.excerpt}` : ""}`.trim().slice(0, 240);
+    const payload = {
+      title: isLive ? "GTN Live Event" : story.is_breaking ? "Breaking News" : "GTN News",
+      body: summary,
+      url: `/story/${encodeURIComponent(story.id)}`,
+      tag: `gtn-story-${story.id}`,
+      icon: "/logo.png",
+      badge: "/logo.png",
+      category: story.category,
+    };
+    const result = await sendPushBatch(savedSubscriptions.map((row) => row.subscription), payload, { publicKey, privateKey, subject });
+    deliveredCount = result.delivered;
+    const expiredEndpoints = result.gone.map((subscription) => subscription.endpoint);
+    if (expiredEndpoints.length) await admin.from("push_subscriptions").delete().in("endpoint", expiredEndpoints);
+    if (result.failed.length > 0) {
+      // Never treat a completely failed send as complete: that hides a bad VAPID
+      // pair or a push service rejection and prevents an operator from retrying.
+      console.error("Push delivery failures", result.failed.map(({ error }) => ({
+        statusCode: typeof error === "object" && error !== null && "statusCode" in error
+          ? (error as { statusCode?: number }).statusCode
+          : undefined,
+        errorName: error instanceof Error ? error.name : "UnknownError",
+      })));
+      if (deliveredCount === 0) {
+        return json({
+          error: "Push services rejected every notification. Verify the VAPID public/private key pair in Supabase and ensure it matches the browser public key.",
+          reason: "delivery_failed",
+          subscriptions: savedSubscriptions.length,
+          delivered: 0,
+          failed: result.failed.length,
+        }, 502, origin);
+      }
     }
     const { error: logError } = await admin.from("push_notification_log").insert({ story_id: storyId, delivered_count: deliveredCount });
     if (logError && logError.code !== "23505") throw logError;
-    return json({ sent: true, delivered: deliveredCount }, 200, origin);
+    return json({ sent: deliveredCount > 0, subscriptions: savedSubscriptions.length, delivered: deliveredCount, failed: result.failed.length }, 200, origin);
   } catch (error) {
     console.error("send-push-notifications failed", error instanceof Error ? error.message : "unexpected error");
     return json({ error: "Could not send notifications" }, 500, origin);

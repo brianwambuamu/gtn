@@ -5,10 +5,6 @@ import { backend, backendConfigured } from "../lib/backend";
 // default in sync with WEB_PUSH_PUBLIC_KEY in Supabase; a build env value overrides it.
 const publicKey = (import.meta.env.VITE_WEB_PUSH_PUBLIC_KEY as string | undefined) ||
   "BKqUrBmmpDs6msXzYd6NVa7wA9IKVAwLoEB79v1Dj0vkLwvF-vSG6BKwRCCGTmB0PGSYCl2D3dRKKUTa5xYXpbU";
-// New key lets existing installs retry once after the earlier flow could have
-// recorded a dismissed prompt without successfully registering the device.
-const permissionPromptKey = "gtn-notification-permission-requested-v3";
-
 function applicationServerKey(value: string): ArrayBuffer {
   const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
   const raw = atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "="));
@@ -41,6 +37,20 @@ export default function PushNotifications() {
     let interactionHandled = false;
     let askedThisSession = false;
 
+    function onPushDelivery(event: Event) {
+      const result = (event as CustomEvent<{ sent?: boolean; reason?: string; subscriptions?: number; delivered?: number; failed?: number; error?: string }>).detail;
+      if (result?.reason === "no_subscriptions") {
+        setNotice("Story published, but no devices are subscribed to GTN notifications yet.");
+      } else if (result?.sent && result.delivered) {
+        setNotice(`Notification sent to ${result.delivered} device${result.delivered === 1 ? "" : "s"}.`);
+      } else if (result?.error) {
+        setNotice(`Story published, but notifications failed: ${result.error}`);
+      } else if (result?.failed) {
+        setNotice(`Some notifications could not be sent (${result.failed} failed). Check the Supabase function logs.`);
+      }
+    }
+    window.addEventListener("gtn:push-delivery", onPushDelivery);
+
     function onUnavailableInteraction(event: Event) {
       if (!event.isTrusted || interactionHandled || disposed) return;
       interactionHandled = true;
@@ -53,6 +63,7 @@ export default function PushNotifications() {
       window.addEventListener("click", onUnavailableInteraction, true);
       return () => {
         disposed = true;
+        window.removeEventListener("gtn:push-delivery", onPushDelivery);
         removeInteractionListeners();
       };
     }
@@ -74,6 +85,7 @@ export default function PushNotifications() {
         subscription: subscription.toJSON(),
         endpoint: subscription.endpoint,
       });
+      if (!disposed) setNotice("This device is subscribed to GTN notifications.");
     }
 
     void navigator.serviceWorker.register("/sw.js").then(async (registration) => {
@@ -107,13 +119,7 @@ export default function PushNotifications() {
       }
 
       if (Notification.permission === "default") {
-        let wasPrompted = askedThisSession;
-        try {
-          wasPrompted ||= window.localStorage.getItem(permissionPromptKey) === "yes";
-        } catch {
-          // Session state still limits retries if browser storage is unavailable.
-        }
-        if (wasPrompted) {
+        if (askedThisSession) {
           interactionHandled = true;
           removeInteractionListeners();
           setNotice("GTN’s notification prompt was already dismissed. Allow notifications for this site in your browser settings.");
@@ -125,18 +131,12 @@ export default function PushNotifications() {
         removeInteractionListeners();
         // Call directly from the trusted interaction so the browser can show its permission prompt.
         void Notification.requestPermission().then((permission) => {
-          try {
-            // Save only after the browser has actually answered the permission request.
-            window.localStorage.setItem(permissionPromptKey, "yes");
-          } catch {
-            // The in-memory flag still ensures that this page asks only once.
-          }
           if (permission === "granted" && !disposed) {
             void registerDevice().catch((error) => {
               console.warn("Could not enable GTN push notifications", error);
               if (!disposed) setNotice(error instanceof Error && error.message.includes("not supported")
                 ? "This browser does not support GTN push notifications. Try an up-to-date browser."
-                : "Permission was granted, but GTN could not register this device. Check your connection and Supabase function deployment, then try again.");
+                : `Permission was granted, but GTN could not register this device: ${error instanceof Error ? error.message : "check the Supabase function deployment"}`);
             });
           } else if (permission === "denied" && !disposed) {
             setNotice("Notifications are blocked for GTN. You can allow them in this site’s browser settings.");
@@ -160,7 +160,7 @@ export default function PushNotifications() {
       removeInteractionListeners();
       void registerDevice().catch((error) => {
         console.warn("Could not enable GTN push notifications", error);
-        if (!disposed) setNotice("GTN could not register this device for notifications. Check your connection and Supabase function deployment, then try again.");
+        if (!disposed) setNotice(`GTN could not register this device for notifications: ${error instanceof Error ? error.message : "check your connection and Supabase function deployment"}`);
       });
     }
 
@@ -169,6 +169,7 @@ export default function PushNotifications() {
 
     return () => {
       disposed = true;
+      window.removeEventListener("gtn:push-delivery", onPushDelivery);
       removeInteractionListeners();
     };
   }, []);
