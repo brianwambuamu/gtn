@@ -5,7 +5,9 @@ import { backend, backendConfigured } from "../lib/backend";
 // default in sync with WEB_PUSH_PUBLIC_KEY in Supabase; a build env value overrides it.
 const publicKey = (import.meta.env.VITE_WEB_PUSH_PUBLIC_KEY as string | undefined) ||
   "BKqUrBmmpDs6msXzYd6NVa7wA9IKVAwLoEB79v1Dj0vkLwvF-vSG6BKwRCCGTmB0PGSYCl2D3dRKKUTa5xYXpbU";
-const permissionPromptKey = "gtn-notification-permission-requested-v2";
+// New key lets existing installs retry once after the earlier flow could have
+// recorded a dismissed prompt without successfully registering the device.
+const permissionPromptKey = "gtn-notification-permission-requested-v3";
 
 function applicationServerKey(value: string): ArrayBuffer {
   const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
@@ -31,7 +33,7 @@ export default function PushNotifications() {
           ? "GTN notifications require the secure HTTPS website."
           : isAppleMobile && !isInstalled
             ? "On iPhone or iPad, add GTN to your Home Screen and open the installed app to enable notifications."
-            : !("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)
+            : !("serviceWorker" in navigator) || !("Notification" in window)
               ? "This browser does not support GTN push notifications. Try an up-to-date browser."
               : "";
 
@@ -57,6 +59,9 @@ export default function PushNotifications() {
 
     async function registerDevice() {
       const registration = await navigator.serviceWorker.ready;
+      if (!registration.pushManager) {
+        throw new Error("Push messaging is not supported by this browser.");
+      }
       let subscription = await registration.pushManager.getSubscription();
       if (!subscription) {
         subscription = await registration.pushManager.subscribe({
@@ -72,6 +77,7 @@ export default function PushNotifications() {
     }
 
     void navigator.serviceWorker.register("/sw.js").then(async (registration) => {
+      if (!registration.pushManager) return;
       const subscription = await registration.pushManager.getSubscription();
       if (subscription) {
         await backend.invoke("manage-push-subscription", {
@@ -80,7 +86,10 @@ export default function PushNotifications() {
           endpoint: subscription.endpoint,
         });
       }
-    }).catch((error) => console.warn("GTN push setup unavailable", error));
+    }).catch((error) => {
+      console.warn("GTN push setup unavailable", error);
+      if (!disposed) setNotice("GTN could not connect this device to notifications. Check your connection, then reload the site and try again.");
+    });
 
     function removeInteractionListeners() {
       window.removeEventListener("keydown", onInteraction, true);
@@ -125,7 +134,9 @@ export default function PushNotifications() {
           if (permission === "granted" && !disposed) {
             void registerDevice().catch((error) => {
               console.warn("Could not enable GTN push notifications", error);
-              if (!disposed) setNotice("Permission was granted, but GTN could not register this device. Check your connection and try again.");
+              if (!disposed) setNotice(error instanceof Error && error.message.includes("not supported")
+                ? "This browser does not support GTN push notifications. Try an up-to-date browser."
+                : "Permission was granted, but GTN could not register this device. Check your connection and Supabase function deployment, then try again.");
             });
           } else if (permission === "denied" && !disposed) {
             setNotice("Notifications are blocked for GTN. You can allow them in this site’s browser settings.");
@@ -149,7 +160,7 @@ export default function PushNotifications() {
       removeInteractionListeners();
       void registerDevice().catch((error) => {
         console.warn("Could not enable GTN push notifications", error);
-        if (!disposed) setNotice("GTN could not register this device for notifications. Check your connection and try again.");
+        if (!disposed) setNotice("GTN could not register this device for notifications. Check your connection and Supabase function deployment, then try again.");
       });
     }
 
