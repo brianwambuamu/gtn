@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { backend, backendConfigured } from "../lib/backend";
 
 const publicKey = import.meta.env.VITE_WEB_PUSH_PUBLIC_KEY as string | undefined;
-const permissionPromptKey = "gtn-notification-permission-requested-v1";
+const permissionPromptKey = "gtn-notification-permission-requested-v2";
 
 function applicationServerKey(value: string): ArrayBuffer {
   const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
@@ -52,7 +52,6 @@ export default function PushNotifications() {
     }).catch((error) => console.warn("GTN push setup unavailable", error));
 
     function removeInteractionListeners() {
-      window.removeEventListener("pointerdown", onInteraction, true);
       window.removeEventListener("keydown", onInteraction, true);
       window.removeEventListener("click", onInteraction, true);
     }
@@ -80,19 +79,28 @@ export default function PushNotifications() {
         }
 
         askedThisSession = true;
-        try {
-          window.localStorage.setItem(permissionPromptKey, "yes");
-        } catch {
-          // The in-memory flag still ensures that this page asks only once.
-        }
         interactionHandled = true;
         removeInteractionListeners();
         // Call directly from the trusted interaction so the browser can show its permission prompt.
         void Notification.requestPermission().then((permission) => {
+          try {
+            // Save only after the browser has actually answered the permission request.
+            window.localStorage.setItem(permissionPromptKey, "yes");
+          } catch {
+            // The in-memory flag still ensures that this page asks only once.
+          }
           if (permission === "granted" && !disposed) {
             void registerDevice().catch((error) => console.warn("Could not enable GTN push notifications", error));
           }
-        }).catch((error) => console.warn("Could not request GTN notification permission", error));
+        }).catch((error) => {
+          console.warn("Could not request GTN notification permission", error);
+          if (!disposed) {
+            askedThisSession = false;
+            interactionHandled = false;
+            window.addEventListener("keydown", onInteraction, true);
+            window.addEventListener("click", onInteraction, true);
+          }
+        });
         return;
       }
 
@@ -101,7 +109,6 @@ export default function PushNotifications() {
       void registerDevice().catch((error) => console.warn("Could not enable GTN push notifications", error));
     }
 
-    window.addEventListener("pointerdown", onInteraction, true);
     window.addEventListener("keydown", onInteraction, true);
     window.addEventListener("click", onInteraction, true);
 

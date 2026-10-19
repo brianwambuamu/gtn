@@ -18,6 +18,6 @@ Push alerts require HTTPS (localhost is fine for development), a one-time browse
    supabase functions deploy send-push-notifications
    ```
 
-4. Build and deploy the website with `VITE_WEB_PUSH_PUBLIC_KEY` set in its hosting environment. Rebuild after changing frontend environment variables.
+4. In Vercel, add `VITE_WEB_PUSH_PUBLIC_KEY` to the Production environment (and Preview if needed), then redeploy. Vite embeds this public key during the build, so changing the variable does not update an existing deployment.
 
-The public header shows an Alerts button on supported browsers. Visitors choose to enable it themselves. They can turn it off with the same button or block it later in the browser's site notification settings. On iOS, visitors must add the site to their Home Screen before browser push is available.
+On supported browsers, GTN requests notification permission after the visitor's first click or keyboard interaction. If accepted, the device subscription is saved automatically. Visitors can later manage notification permission in their browser settings. On iPhone or iPad, install GTN from Safari using Share → Add to Home Screen, then open the Home Screen app before granting push permission; iOS does not enable web push for an ordinary browser tab.
