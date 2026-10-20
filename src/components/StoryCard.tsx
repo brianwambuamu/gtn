@@ -25,9 +25,10 @@ export default function StoryCard({ story, size = "md", corner }: Props) {
         <h3 className="card__title">
           <Link to={`/story/${story.id}`}>{story.title}</Link>
         </h3>
-        <span className="card__byline">
-          By {story.author ?? "GTN Newsroom"}
-        </span>
+        <div className="card__meta">
+          <span className="card__byline">By {story.author ?? "GTN Newsroom"}</span>
+          <time dateTime={story.publishedAt}>{story.time}</time>
+        </div>
       </div>
     </article>
   );

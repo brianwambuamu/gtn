@@ -4,7 +4,7 @@ import type { Story } from "../data/news";
 import AdSlot from "../components/AdSlot";
 import CategoryTabs from "../components/CategoryTabs";
 import StoryCard from "../components/StoryCard";
-import StoryImage from "../components/StoryImage";
+import StoryMedia from "../components/StoryMedia";
 import TrendingNow from "../components/TrendingNow";
 import VideoListMini from "../components/VideoListMini";
 import { useNews } from "../store/NewsContext";
@@ -34,11 +34,9 @@ export default function NewsPage() {
   const term = (params.get("q") ?? "").trim().toLowerCase();
   const searching = term.length > 0;
 
-  const lead = searching
-    ? undefined
-    : newsStories.find((story) => story.id === "lead-1");
+  const lead = searching ? undefined : newsStories[0];
   const feed = newsStories.filter(
-    (story) => story.id !== "lead-1" && matches(story, term),
+    (story) => story.id !== lead?.id && matches(story, term),
   );
 
   const feedContent: ReactNode[] = [];
@@ -89,6 +87,7 @@ export default function NewsPage() {
         </p>
       ) : (
         <>
+          {!searching && newsStories.length === 0 && <p className="empty">No published news yet. New stories will appear here after they are added to the newsroom database.</p>}
           {lead && (
             <article className="pin">
               <Link
@@ -97,7 +96,7 @@ export default function NewsPage() {
                 tabIndex={-1}
                 aria-hidden="true"
               >
-                <StoryImage seed={lead.seed} ratio="16 / 9" />
+                <StoryMedia story={lead} ratio="16 / 9" />
               </Link>
               <div className="pin__body">
                 <span className="kicker">{lead.category}</span>

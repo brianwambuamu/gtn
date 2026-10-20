@@ -1,0 +1,17 @@
+{
+  "name": "GTN News",
+  "short_name": "GTN News",
+  "description": "Breaking news, live events, and the latest stories from GTN.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f6f8fb",
+  "theme_color": "#245ca3",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "any",
+      "type": "image/png"
+    }
+  ]
+}

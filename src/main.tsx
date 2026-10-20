@@ -6,15 +6,21 @@ import App from "./App.tsx";
 import { AuthProvider } from "./store/AuthContext.tsx";
 import { NewsProvider } from "./store/NewsContext.tsx";
 import { AdsProvider } from "./store/AdsContext.tsx";
+import { CategoriesProvider } from "./store/CategoriesContext.tsx";
+import { PermissionsProvider } from "./store/PermissionsContext.tsx";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <BrowserRouter>
       <AuthProvider>
         <AdsProvider>
-          <NewsProvider>
-            <App />
-          </NewsProvider>
+          <PermissionsProvider>
+            <CategoriesProvider>
+              <NewsProvider>
+                <App />
+              </NewsProvider>
+            </CategoriesProvider>
+          </PermissionsProvider>
         </AdsProvider>
       </AuthProvider>
     </BrowserRouter>
