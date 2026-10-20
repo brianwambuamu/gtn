@@ -101,9 +101,25 @@ export default function NewsCutMaker({ stories, isSuperAdmin }: { stories: Story
       const shade = ctx.createLinearGradient(0, 400, 0, H);
       shade.addColorStop(0, "rgba(0,0,0,0)"); shade.addColorStop(.32, "rgba(0,0,0,.56)"); shade.addColorStop(1, "rgba(0,0,0,.96)");
       ctx.fillStyle = shade; ctx.fillRect(0, 0, W, H);
-      ctx.fillStyle = "rgba(255,255,255,.95)"; ctx.beginPath(); ctx.roundRect(54, 48, 294, 136, 28); ctx.fill();
       const logo = new Image();
-      logo.onload = () => { ctx.drawImage(logo, 76, 58, 112, 112); ctx.fillStyle = "#10233b"; ctx.font = "700 38px Arial, sans-serif"; ctx.fillText("GTN NEWS", 198, 128); setPreviewReady(true); };
+      logo.onload = () => {
+        // Match the public masthead: the supplied GTN mark and NEWS name remain separate objects.
+        ctx.save();
+        ctx.shadowColor = "rgba(7, 32, 54, .2)"; ctx.shadowBlur = 18; ctx.shadowOffsetY = 6;
+        ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.roundRect(54, 48, 134, 134, 24); ctx.fill();
+        ctx.shadowColor = "rgba(7, 32, 54, .12)"; ctx.shadowBlur = 14; ctx.shadowOffsetY = 5;
+        ctx.beginPath(); ctx.moveTo(220, 60); ctx.lineTo(434, 60); ctx.lineTo(408, 170); ctx.lineTo(194, 170); ctx.closePath(); ctx.fill();
+        ctx.shadowColor = "transparent"; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+        ctx.lineWidth = 2; ctx.strokeStyle = "rgba(230, 111, 20, .28)"; ctx.stroke();
+        const markSize = 116;
+        const scale = Math.min(markSize / logo.width, markSize / logo.height);
+        const markWidth = logo.width * scale; const markHeight = logo.height * scale;
+        ctx.drawImage(logo, 63 + (markSize - markWidth) / 2, 57 + (markSize - markHeight) / 2, markWidth, markHeight);
+        ctx.fillStyle = "#d96a10"; ctx.font = "800 38px Arial, sans-serif"; ctx.textAlign = "center";
+        ctx.fillText("NEWS", 314, 128);
+        ctx.restore();
+        setPreviewReady(true);
+      };
       logo.onerror = () => setPreviewReady(true);
       logo.src = "/logo.png";
       const dateText = new Intl.DateTimeFormat("en-KE", { day: "numeric", month: "long", year: "numeric", timeZone: "Africa/Nairobi" }).format(selected?.publishedAt ? new Date(selected.publishedAt) : new Date());

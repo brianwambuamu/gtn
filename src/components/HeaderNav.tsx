@@ -41,10 +41,10 @@ export default function HeaderNav({ query, onQueryChange }: Props) {
   return <header className="site-header">
     <div className="site-header__surface">
       <div className="site-header__inner">
-        <Link to="/" aria-label="GTN News home" className="site-header__brand">
-          <span className="site-header__brand-mark"><img src="/logo.png" alt="GTN" /></span>
-          <span className="site-header__brand-name">GTN <b>News</b></span>
-        </Link>
+        <div className="site-header__brand" role="group" aria-label="GTN News brand">
+          <Link to="/" aria-label="GTN home" className="site-header__brand-mark"><img src="/logo.png" alt="GTN" /></Link>
+          <Link to="/" className="site-header__brand-name">NEWS</Link>
+        </div>
 
         <nav aria-label="Primary" className="site-header__nav">
           <ul>{navItems.map((item) => <li key={item.label}>

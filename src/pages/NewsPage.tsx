@@ -54,7 +54,7 @@ export default function NewsPage() {
   });
 
   return (
-    <main className="container main" id="top">
+    <main className="container main news-page" id="top">
       <CategoryTabs />
       <div className="cat-head">
         <h1>{searching ? "Search Results" : "News"}</h1>
