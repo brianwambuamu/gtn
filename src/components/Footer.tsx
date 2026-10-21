@@ -56,7 +56,7 @@ export default function Footer() {
         <div className="footer__brand">
           <img src="/logo.png" alt="GTN News" className="footer__logo" />
           <p>
-            Gusii Television Network — independent reporting from the newsroom
+            Grand Television Network — independent reporting from the newsroom
             to your screen. Breaking news, analysis and live coverage, around
             the clock.
           </p>
