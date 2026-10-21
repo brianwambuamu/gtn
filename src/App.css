@@ -3312,14 +3312,14 @@
 .site-header__surface {
   background-image:
     linear-gradient(to bottom, transparent 0 72px, #fff 72px 100%),
-    linear-gradient(96deg, #f68220 0%, #e8a06d 3%, #248b9a 13%, #087f98 39%, #087f98 62%, #248b9a 82%, #e8a06d 97%, #f68220 100%);
+    linear-gradient(96deg, #f68220 0%, #e8a06d 3%, #248b9a 13%, #087f98 30%, #168794 38%, #658884 45%, #b77b51 50%, #658884 55%, #168794 62%, #087f98 70%, #248b9a 82%, #e8a06d 97%, #f68220 100%);
   background-color: #087f98;
 }
 @media (max-width: 600px) {
   .site-header__surface {
     background-image:
       linear-gradient(to bottom, transparent 0 66px, #fff 66px 100%),
-      linear-gradient(96deg, #f68220 0%, #e8a06d 3%, #248b9a 13%, #087f98 39%, #087f98 62%, #248b9a 82%, #e8a06d 97%, #f68220 100%);
+      linear-gradient(96deg, #f68220 0%, #e8a06d 3%, #248b9a 13%, #087f98 30%, #168794 38%, #658884 45%, #b77b51 50%, #658884 55%, #168794 62%, #087f98 70%, #248b9a 82%, #e8a06d 97%, #f68220 100%);
   }
 }
 .site-header__search:hover, .site-header__account:hover, .site-header__search:focus-within {
