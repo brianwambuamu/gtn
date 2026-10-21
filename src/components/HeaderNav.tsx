@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../store/AuthContext";
@@ -27,7 +27,14 @@ export default function HeaderNav({ query, onQueryChange }: Props) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchOpen, setSearchOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const accountLabel = user ? `Hi, ${user.display_name}` : "Sign In";
+
+  useEffect(() => {
+    if (!searchOpen) return;
+    const frame = window.requestAnimationFrame(() => searchInputRef.current?.focus());
+    return () => window.cancelAnimationFrame(frame);
+  }, [searchOpen]);
 
   function submitSearch(event: FormEvent) {
     event.preventDefault();
@@ -57,10 +64,10 @@ export default function HeaderNav({ query, onQueryChange }: Props) {
 
         <div className="site-header__actions">
           <PushNotifications />
-          <form role="search" onSubmit={submitSearch} className="site-header__search">
+          <form role="search" onSubmit={submitSearch} className={`site-header__search${searchOpen ? " is-open" : ""}`}>
             <button type="button" onClick={() => setSearchOpen((open) => !open)} aria-expanded={searchOpen} aria-label={searchOpen ? "Close search" : "Open search"} className="site-header__search-toggle"><SearchIcon /></button>
             <label className="sr-only" htmlFor="site-header-search">Search stories</label>
-            <input id="site-header-search" type="search" value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="Search" className={searchOpen ? "is-open" : ""} />
+            <input ref={searchInputRef} id="site-header-search" type="search" value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="Search stories" className={searchOpen ? "is-open" : ""} />
           </form>
           <Link to="/admin" className="site-header__account">{accountLabel}</Link>
         </div>
