@@ -1,6 +1,5 @@
 import { Link, useParams } from "react-router-dom";
 import AdSlot from "../components/AdSlot";
-import CategoryTabs from "../components/CategoryTabs";
 import StoryCard from "../components/StoryCard";
 import StoryMedia from "../components/StoryMedia";
 import { slugToLabel, slugify } from "../data/categories";
@@ -19,7 +18,6 @@ export default function CategoryPage() {
 
   return (
     <main className="container main" id="top">
-      <CategoryTabs />
       <div className="cat-head">
         <h1>{label}</h1>
         <span>

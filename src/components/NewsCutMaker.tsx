@@ -96,33 +96,40 @@ export default function NewsCutMaker({ stories, isSuperAdmin }: { stories: Story
         const sw = W / scale; const sh = H / scale;
         ctx.drawImage(image, (image.width - sw) / 2, (image.height - sh) / 2, sw, sh, 0, 0, W, H);
       } else {
-        const base = ctx.createLinearGradient(0, 0, W, H);
-        base.addColorStop(0, "#173b65"); base.addColorStop(1, "#ef7620");
+        const base = ctx.createLinearGradient(0, 0, 0, H);
+        base.addColorStop(0, "#56c8f5"); base.addColorStop(.5, "#a3b0bd"); base.addColorStop(1, "#f2913f");
         ctx.fillStyle = base; ctx.fillRect(0, 0, W, H);
       }
       const shade = ctx.createLinearGradient(0, 400, 0, H);
       shade.addColorStop(0, "rgba(0,0,0,0)"); shade.addColorStop(.32, "rgba(0,0,0,.56)"); shade.addColorStop(1, "rgba(0,0,0,.96)");
       ctx.fillStyle = shade; ctx.fillRect(0, 0, W, H);
+      const band = ctx.createLinearGradient(0, 0, 0, 360);
+      band.addColorStop(0, "rgba(86,200,245,.97)"); band.addColorStop(.72, "rgba(126,202,236,.95)"); band.addColorStop(1, "rgba(214,238,250,0)");
+      ctx.fillStyle = band; ctx.fillRect(0, 0, W, 360);
+      const foot = ctx.createLinearGradient(0, 1150, 0, H);
+      foot.addColorStop(0, "rgba(242,145,63,0)"); foot.addColorStop(.6, "rgba(242,145,63,.55)"); foot.addColorStop(1, "rgba(230,120,30,1)");
+      ctx.fillStyle = foot; ctx.fillRect(0, 1150, W, H - 1150);
       const logo = new Image();
       logo.onload = () => {
         ctx.save();
-        ctx.shadowColor = "rgba(7, 32, 54, .24)"; ctx.shadowBlur = 18; ctx.shadowOffsetY = 6;
-        ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.roundRect(54, 48, 138, 138, 25); ctx.fill();
-        ctx.shadowColor = "transparent"; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
-        // The source artwork has generous white margins; crop to the GTN mark for a clear, mark-only lockup.
+        ctx.shadowColor = "rgba(10, 35, 60, .3)"; ctx.shadowBlur = 16; ctx.shadowOffsetY = 5;
+        // The source artwork has generous margins; crop to the GTN mark for a clear, mark-only lockup.
         const sx = logo.width * .19; const sy = logo.height * .22;
         const sw = logo.width * .62; const sh = logo.height * .56;
-        ctx.drawImage(logo, sx, sy, sw, sh, 66, 60, 114, 114);
+        ctx.drawImage(logo, sx, sy, sw, sh, 58, 54, 132, 132);
         ctx.restore();
         setPreviewReady(true);
       };
       logo.onerror = () => setPreviewReady(true);
       logo.src = "/logo.png";
+      ctx.save();
+      ctx.fillStyle = "#10263c"; ctx.font = "800 62px Arial, sans-serif"; ctx.textBaseline = "middle";
+      ctx.fillText("NEWS", 206, 120);
+      ctx.restore();
       const dateText = new Intl.DateTimeFormat("en-KE", { day: "numeric", month: "long", year: "numeric", timeZone: "Africa/Nairobi" }).format(selected?.publishedAt ? new Date(selected.publishedAt) : new Date());
       ctx.save();
-      ctx.fillStyle = "rgba(12, 22, 35, .62)"; ctx.beginPath(); ctx.roundRect(52, 198, 344, 52, 16); ctx.fill();
-      ctx.fillStyle = "#fff"; ctx.shadowColor = "rgba(0,0,0,.34)"; ctx.shadowBlur = 8;
-      ctx.font = "700 27px Arial, sans-serif"; ctx.textBaseline = "middle"; ctx.fillText(dateText, 70, 224);
+      ctx.fillStyle = "#10263c";
+      ctx.font = "700 27px Arial, sans-serif"; ctx.textBaseline = "middle"; ctx.fillText(dateText, 60, 240);
       ctx.restore();
 
       const alertTop = 736;
@@ -145,7 +152,7 @@ export default function NewsCutMaker({ stories, isSuperAdmin }: { stories: Story
 
       const accentBottom = paragraphBaseline + Math.max(0, paragraphLines.length - 1) * paragraphLineHeight + 14;
       ctx.fillStyle = "#f58220"; ctx.beginPath(); ctx.roundRect(52, alertTop, 9, accentBottom - alertTop, 5); ctx.fill();
-      ctx.fillStyle = "rgba(255,255,255,.9)"; ctx.font = "700 24px Arial, sans-serif"; ctx.fillText("GTN News", 62, 1292);
+      ctx.fillStyle = "#3b2408"; ctx.font = "700 26px Arial, sans-serif"; ctx.fillText("GTN News", 62, 1310);
     };
     if (!photo) { draw(); return; }
     const img = new Image();

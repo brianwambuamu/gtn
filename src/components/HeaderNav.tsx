@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { Link, NavLink, useNavigate } from "react-router-dom";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../store/AuthContext";
+import CategoryTabs from "./CategoryTabs";
 import PushNotifications from "./PushNotifications";
 
 type Props = {
@@ -26,9 +27,12 @@ function SearchIcon() {
 export default function HeaderNav({ query, onQueryChange }: Props) {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const [searchOpen, setSearchOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const accountLabel = user ? `Hi, ${user.display_name}` : "Sign In";
+  const showCategories =
+    pathname === "/news" || pathname.startsWith("/category/");
 
   useEffect(() => {
     if (!searchOpen) return;
@@ -72,6 +76,7 @@ export default function HeaderNav({ query, onQueryChange }: Props) {
           <Link to="/admin" className="site-header__account">{accountLabel}</Link>
         </div>
       </div>
+      {showCategories && <CategoryTabs />}
     </div>
   </header>;
 }

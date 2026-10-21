@@ -2,7 +2,6 @@ import { Link, useSearchParams } from "react-router-dom";
 import type { ReactNode } from "react";
 import type { Story } from "../data/news";
 import AdSlot from "../components/AdSlot";
-import CategoryTabs from "../components/CategoryTabs";
 import StoryCard from "../components/StoryCard";
 import StoryMedia from "../components/StoryMedia";
 import TrendingNow from "../components/TrendingNow";
@@ -55,7 +54,6 @@ export default function NewsPage() {
 
   return (
     <main className="container main news-page" id="top">
-      <CategoryTabs />
       <div className="cat-head">
         <h1>{searching ? "Search Results" : "News"}</h1>
         <span>
