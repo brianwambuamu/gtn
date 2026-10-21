@@ -6,6 +6,23 @@
     <link rel="apple-touch-icon" href="/logo.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      (() => {
+        const isCompactTouchDevice =
+          (window.matchMedia("(pointer: coarse)").matches || navigator.maxTouchPoints > 0) &&
+          Math.min(window.screen.width, window.screen.height) <= 767;
+
+        if (isCompactTouchDevice) {
+          const viewport = document.querySelector('meta[name="viewport"]');
+          if (viewport) {
+            viewport.setAttribute(
+              "content",
+              `width=${window.screen.width}, initial-scale=1.0, viewport-fit=cover`,
+            );
+          }
+        }
+      })();
+    </script>
     <meta name="theme-color" content="#1c74c2" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="GTN News" />
