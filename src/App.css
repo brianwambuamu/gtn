@@ -1180,6 +1180,7 @@
     text-decoration: underline;
   }
 }
+
 .searchbar {
   display: flex;
   align-items: center;
@@ -3633,4 +3634,105 @@
     overflow-y: auto;
     overscroll-behavior-y: auto;
   }
+}
+
+/* TV page: preserve a full-width player and make the video queues thumb-friendly. */
+@media (max-width: 900px) {
+  .tvband .tv__layout { grid-template-columns: minmax(0, 1fr); gap: 22px; }
+}
+@media (max-width: 600px) {
+  .tvband { padding: 26px 0 40px; }
+  .tvband > .container { padding-right: 16px; padding-left: 16px; }
+  .tvband .tv .section__head--dark {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 10px 14px;
+    margin-bottom: 18px;
+    padding-bottom: 12px;
+  }
+  .tvband .tv .section__head--dark .section__title { font-size: 20px; }
+  .tvband .tv .section__head--dark .section__link { min-height: 40px; font-size: 11px; }
+  .tvband .tv__layout { gap: 18px; }
+  .tvband .tv__player { min-width: 0; }
+  .tvband .tv__frame { width: 100%; aspect-ratio: 16 / 9; border-radius: 12px; }
+  .tvband .tv__play { width: 54px; height: 54px; }
+  .tvband .tv__duration { right: 8px; bottom: 8px; font-size: 11px; }
+  .tvband .tv__player .kicker { margin-top: 14px; font-size: 9px; }
+  .tvband .tv__title { margin-top: 6px; font-size: clamp(18px, 5vw, 22px); line-height: 1.28; }
+  .tvband .tv__meta { align-items: center; gap: 7px 9px; margin-top: 9px; font-size: 11px; line-height: 1.4; }
+  .tvband .tv__meta a { flex: 0 0 auto; min-height: 36px; display: inline-flex; align-items: center; gap: 5px; border: 1px solid rgba(255,255,255,.24); border-radius: 999px; padding: 0 11px; }
+  .tvband .tv__next { min-width: 0; border-radius: 14px; padding: 14px 14px 6px; }
+  .tvband .tv__next-title { margin-bottom: 9px; padding-bottom: 10px; font-size: 11px; }
+  .tvband .tv__next-list {
+    display: flex;
+    max-height: none;
+    gap: 11px;
+    margin: 0 -14px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 2px 14px 12px;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    touch-action: pan-x;
+    -webkit-overflow-scrolling: touch;
+  }
+  .tvband .tv__next-list::-webkit-scrollbar { display: none; }
+  .tvband .tv__thumb {
+    display: flex;
+    flex: 0 0 min(76vw, 260px);
+    flex-direction: column;
+    gap: 0;
+    min-width: 0;
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 12px;
+    background: rgba(255,255,255,.045);
+    padding: 8px;
+    scroll-snap-align: start;
+  }
+  .tvband .tv__thumb-media { flex: none; width: 100%; aspect-ratio: 16 / 9; border-radius: 8px; }
+  .tvband .tv__thumb-body { padding: 9px 2px 3px; }
+  .tvband .tv__thumb-title { font-size: 12px; line-height: 1.35; }
+  .tvband .tv__thumb-meta { margin-top: 5px; font-size: 10px; }
+  .tvband .tv__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 12px; margin-top: 22px; }
+  .tvband .tvcard { min-width: 0; }
+  .tvband .tvcard__media { border-radius: 11px; }
+  .tvband .tvcard__play { width: 40px; height: 40px; opacity: 1; transform: translate(-50%, -50%) scale(.86); }
+  .tvband .tvcard__play svg { width: 20px; height: 20px; }
+  .tvband .tvcard__title { margin-top: 8px; font-size: 12px; line-height: 1.35; -webkit-line-clamp: 2; }
+  .tvband .tvcard__meta { margin-top: 5px; font-size: 10px; line-height: 1.35; }
+  .tvband .tv__more { width: min(100%, 320px); margin-top: 24px; padding: 11px 16px; font-size: 11px; }
+  .tvband .tv__empty { min-height: 170px; padding: 24px 18px; font-size: 13px; line-height: 1.55; }
+}
+
+/* Mobile masthead order: brand first, search and account controls after it. */
+@media (max-width: 600px) {
+  .site-header__inner {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    column-gap: 8px;
+  }
+  .site-header__brand {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: start;
+    min-width: 0;
+  }
+  .site-header__actions {
+    display: flex;
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+    min-width: 0;
+    gap: 6px;
+  }
+  .site-header__search,
+  .site-header__account { grid-column: auto; grid-row: auto; }
+}
+
+@media (max-width: 380px) {
+  .site-header__brand { gap: 5px; }
+  .site-header__brand-mark { flex-basis: 36px; width: 36px; height: 36px; }
+  .site-header__brand-name { font-size: 12px; }
+  .site-header__actions { gap: 5px; }
+  .site-header__account { max-width: 76px; padding-right: 8px; padding-left: 8px; }
 }
