@@ -2,7 +2,7 @@ import { Link, useParams } from "react-router-dom";
 import AdSlot from "../components/AdSlot";
 import CategoryTabs from "../components/CategoryTabs";
 import StoryCard from "../components/StoryCard";
-import StoryImage from "../components/StoryImage";
+import StoryMedia from "../components/StoryMedia";
 import { slugToLabel, slugify } from "../data/categories";
 import { channelUrl } from "../data/videos";
 import { useNews } from "../store/NewsContext";
@@ -30,7 +30,6 @@ export default function CategoryPage() {
       {items.length === 0 ? (
         <p className="empty">
           No stories in {label} yet.{" "}
-          <Link to="/admin">Add the first one from the admin page</Link> or{" "}
           <Link to="/news">browse all news</Link>.
         </p>
       ) : (
@@ -43,7 +42,7 @@ export default function CategoryPage() {
                 tabIndex={-1}
                 aria-hidden="true"
               >
-                <StoryImage seed={first.seed} ratio="16 / 9" />
+                <StoryMedia story={first} ratio="16 / 9" />
               </Link>
               <div className="pin__body">
                 <span className="kicker">{first.category}</span>

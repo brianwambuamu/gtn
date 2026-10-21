@@ -54,7 +54,7 @@ export default function NewsPage() {
   });
 
   return (
-    <main className="container main" id="top">
+    <main className="container main news-page" id="top">
       <CategoryTabs />
       <div className="cat-head">
         <h1>{searching ? "Search Results" : "News"}</h1>
@@ -87,7 +87,7 @@ export default function NewsPage() {
         </p>
       ) : (
         <>
-          {!searching && newsStories.length === 0 && <p className="empty">No published news yet. New stories will appear here after they are added to the newsroom database.</p>}
+          {!searching && newsStories.length === 0 && <p className="empty">No published news yet. New stories will appear here after they are added to the newsroom.</p>}
           {lead && (
             <article className="pin">
               <Link

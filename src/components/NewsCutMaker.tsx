@@ -9,24 +9,26 @@ const H = 1350;
 type SocialAccount = { id: string; provider: "facebook" | "instagram" | "x"; account_id: string; account_name: string; expires_at?: string | null };
 type PublishResult = { accountId: string; accountName: string; provider: string; success: boolean; postId?: string; error?: string };
 
-function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, maxLines: number, lineHeight: number) {
+function wrapLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, maxLines: number) {
   const words = text.trim().split(/\s+/).filter(Boolean);
   const lines: string[] = [];
   let line = "";
-  for (const word of words) {
-    const next = line ? `${line} ${word}` : word;
-    if (ctx.measureText(next).width > maxWidth && line) { lines.push(line); line = word; }
-    else line = next;
-    if (lines.length === maxLines) break;
+  let wordIndex = 0;
+  for (; wordIndex < words.length; wordIndex += 1) {
+    const next = line ? `${line} ${words[wordIndex]}` : words[wordIndex];
+    if (ctx.measureText(next).width > maxWidth && line) {
+      lines.push(line);
+      line = words[wordIndex];
+      if (lines.length === maxLines) { wordIndex += 1; break; }
+    } else line = next;
   }
-  if (lines.length < maxLines && line) lines.push(line);
-  if (words.length && lines.length === maxLines && lines.at(-1)) {
+  if (line && lines.length < maxLines) lines.push(line);
+  if (wordIndex < words.length && lines.length) {
     let last = lines[lines.length - 1];
     while (ctx.measureText(`${last}…`).width > maxWidth && last.length > 4) last = last.slice(0, -1);
     lines[lines.length - 1] = `${last.trimEnd()}…`;
   }
-  lines.forEach((value, index) => ctx.fillText(value, 80, 852 + index * lineHeight));
-  return lines.length;
+  return lines;
 }
 
 function imageSource(story?: Story) {
@@ -101,27 +103,49 @@ export default function NewsCutMaker({ stories, isSuperAdmin }: { stories: Story
       const shade = ctx.createLinearGradient(0, 400, 0, H);
       shade.addColorStop(0, "rgba(0,0,0,0)"); shade.addColorStop(.32, "rgba(0,0,0,.56)"); shade.addColorStop(1, "rgba(0,0,0,.96)");
       ctx.fillStyle = shade; ctx.fillRect(0, 0, W, H);
-      ctx.fillStyle = "rgba(255,255,255,.95)"; ctx.beginPath(); ctx.roundRect(54, 48, 294, 136, 28); ctx.fill();
       const logo = new Image();
-      logo.onload = () => { ctx.drawImage(logo, 76, 58, 112, 112); ctx.fillStyle = "#10233b"; ctx.font = "700 38px Arial, sans-serif"; ctx.fillText("GTN NEWS", 198, 128); setPreviewReady(true); };
+      logo.onload = () => {
+        ctx.save();
+        ctx.shadowColor = "rgba(7, 32, 54, .24)"; ctx.shadowBlur = 18; ctx.shadowOffsetY = 6;
+        ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.roundRect(54, 48, 138, 138, 25); ctx.fill();
+        ctx.shadowColor = "transparent"; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+        // The source artwork has generous white margins; crop to the GTN mark for a clear, mark-only lockup.
+        const sx = logo.width * .19; const sy = logo.height * .22;
+        const sw = logo.width * .62; const sh = logo.height * .56;
+        ctx.drawImage(logo, sx, sy, sw, sh, 66, 60, 114, 114);
+        ctx.restore();
+        setPreviewReady(true);
+      };
       logo.onerror = () => setPreviewReady(true);
       logo.src = "/logo.png";
       const dateText = new Intl.DateTimeFormat("en-KE", { day: "numeric", month: "long", year: "numeric", timeZone: "Africa/Nairobi" }).format(selected?.publishedAt ? new Date(selected.publishedAt) : new Date());
-      ctx.fillStyle = "#fff"; ctx.font = "500 27px Arial, sans-serif"; ctx.fillText(dateText, 58, 224);
-      ctx.fillStyle = "#f58220"; ctx.fillRect(52, 764, 12, 360);
-      ctx.fillStyle = "#f58220"; ctx.fillRect(82, 758, 336, 66);
-      ctx.fillStyle = "#fff"; ctx.font = "800 38px Arial, sans-serif"; ctx.fillText("NEWS ALERT", 100, 805);
-      ctx.fillStyle = "#fff"; ctx.font = "800 48px Arial, sans-serif"; wrapText(ctx, headline || "Your news headline", 920, 4, 60);
-      ctx.fillStyle = "rgba(255,255,255,.94)"; ctx.font = "500 29px Arial, sans-serif";
-      const words = (paragraph || "Add a short summary to appear beneath the headline.").trim().split(/\s+/);
-      let line = ""; let lineIndex = 0;
-      for (const word of words) {
-        const next = line ? `${line} ${word}` : word;
-        if (ctx.measureText(next).width > 900 && line) { ctx.fillText(line, 82, 1120 + lineIndex++ * 40); line = word; if (lineIndex >= 3) break; }
-        else line = next;
-      }
-      if (lineIndex < 3 && line) ctx.fillText(line, 82, 1120 + lineIndex * 40);
-      ctx.fillStyle = "rgba(255,255,255,.8)"; ctx.font = "600 24px Arial, sans-serif"; ctx.fillText("GTN  •  NEWSROOM", 62, 1292);
+      ctx.save();
+      ctx.fillStyle = "rgba(12, 22, 35, .62)"; ctx.beginPath(); ctx.roundRect(52, 198, 344, 52, 16); ctx.fill();
+      ctx.fillStyle = "#fff"; ctx.shadowColor = "rgba(0,0,0,.34)"; ctx.shadowBlur = 8;
+      ctx.font = "700 27px Arial, sans-serif"; ctx.textBaseline = "middle"; ctx.fillText(dateText, 70, 224);
+      ctx.restore();
+
+      const alertTop = 736;
+      const alertHeight = 58;
+      const headlineBaseline = 862;
+      const headlineLineHeight = 55;
+      ctx.fillStyle = "#f58220"; ctx.beginPath(); ctx.roundRect(82, alertTop, 340, alertHeight, 3); ctx.fill();
+      ctx.fillStyle = "#fff"; ctx.font = "800 37px Arial, sans-serif"; ctx.textBaseline = "alphabetic"; ctx.fillText("NEWS ALERT", 100, alertTop + 41);
+
+      ctx.fillStyle = "#fff"; ctx.font = "800 48px Arial, sans-serif";
+      const headlineLines = wrapLines(ctx, headline || "Your news headline", 920, 4);
+      headlineLines.forEach((line, index) => ctx.fillText(line, 82, headlineBaseline + index * headlineLineHeight));
+
+      ctx.fillStyle = "rgba(255,255,255,.96)"; ctx.font = "500 25px Arial, sans-serif";
+      const paragraphLineHeight = 34;
+      const paragraphBaseline = headlineBaseline + headlineLines.length * headlineLineHeight - 13;
+      const paragraphMaxLines = Math.max(1, Math.min(8, Math.floor((1238 - paragraphBaseline) / paragraphLineHeight) + 1));
+      const paragraphLines = wrapLines(ctx, paragraph || "Add a short summary to appear beneath the headline.", 920, paragraphMaxLines);
+      paragraphLines.forEach((line, index) => ctx.fillText(line, 82, paragraphBaseline + index * paragraphLineHeight));
+
+      const accentBottom = paragraphBaseline + Math.max(0, paragraphLines.length - 1) * paragraphLineHeight + 14;
+      ctx.fillStyle = "#f58220"; ctx.beginPath(); ctx.roundRect(52, alertTop, 9, accentBottom - alertTop, 5); ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,.9)"; ctx.font = "700 24px Arial, sans-serif"; ctx.fillText("GTN News", 62, 1292);
     };
     if (!photo) { draw(); return; }
     const img = new Image();
