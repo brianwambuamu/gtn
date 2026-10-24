@@ -103,9 +103,11 @@ export default function NewsCutMaker({ stories, isSuperAdmin }: { stories: Story
       const shade = ctx.createLinearGradient(0, 400, 0, H);
       shade.addColorStop(0, "rgba(0,0,0,0)"); shade.addColorStop(.32, "rgba(0,0,0,.56)"); shade.addColorStop(1, "rgba(0,0,0,.96)");
       ctx.fillStyle = shade; ctx.fillRect(0, 0, W, H);
-      const band = ctx.createLinearGradient(0, 0, 0, 360);
-      band.addColorStop(0, "rgba(86,200,245,.97)"); band.addColorStop(.72, "rgba(126,202,236,.95)"); band.addColorStop(1, "rgba(214,238,250,0)");
-      ctx.fillStyle = band; ctx.fillRect(0, 0, W, 360);
+      const band = ctx.createLinearGradient(0, 0, 0, 310);
+      band.addColorStop(0, "rgba(28,116,194,.48)");
+      band.addColorStop(.42, "rgba(28,116,194,.24)");
+      band.addColorStop(1, "rgba(28,116,194,0)");
+      ctx.fillStyle = band; ctx.fillRect(0, 0, W, 310);
       const foot = ctx.createLinearGradient(0, 1150, 0, H);
       foot.addColorStop(0, "rgba(242,145,63,0)"); foot.addColorStop(.6, "rgba(242,145,63,.55)"); foot.addColorStop(1, "rgba(230,120,30,1)");
       ctx.fillStyle = foot; ctx.fillRect(0, 1150, W, H - 1150);
@@ -122,10 +124,6 @@ export default function NewsCutMaker({ stories, isSuperAdmin }: { stories: Story
       };
       logo.onerror = () => setPreviewReady(true);
       logo.src = "/logo.png";
-      ctx.save();
-      ctx.fillStyle = "#10263c"; ctx.font = "800 62px Arial, sans-serif"; ctx.textBaseline = "middle";
-      ctx.fillText("NEWS", 206, 120);
-      ctx.restore();
       const dateText = new Intl.DateTimeFormat("en-KE", { day: "numeric", month: "long", year: "numeric", timeZone: "Africa/Nairobi" }).format(selected?.publishedAt ? new Date(selected.publishedAt) : new Date());
       ctx.save();
       ctx.fillStyle = "#10263c";
